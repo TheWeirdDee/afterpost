@@ -1,5 +1,6 @@
 import { CreateWorkspaceRequestSchema, type WorkspaceDto } from "@afterpost/contracts";
 import type { FastifyInstance } from "fastify";
+import { requireAuth, requireWorkspaceRole } from "../middleware/auth.js";
 import { prisma } from "../../lib/prisma.js";
 import { ApiError, NOT_FOUND, VALIDATION_FAILED } from "../errors.js";
 
@@ -19,28 +20,16 @@ function toDto(workspace: {
   };
 }
 
-/**
- * FR-A02 (P0): workspace creation. No auth wired up yet — see
- * docs/INTEGRATIONS.md and README "in progress" section. `ownerId` is
- * accepted directly in the request body as an explicit, temporary stand-in
- * until Auth.js issues a verified session; this is NOT how it will work
- * once auth lands; it is a real, working, honestly-labelled placeholder so
- * the rest of the stack (DB, contracts, error handling) can be exercised
- * end to end right now.
- */
+/** FR-A02 (P0): workspace creation. Owner is the authenticated user — never
+ * an arbitrary ID supplied in the request body. */
 export async function workspaceRoutes(app: FastifyInstance): Promise<void> {
-  app.post("/v1/workspaces", async (request, reply) => {
+  app.post("/v1/workspaces", { preHandler: requireAuth }, async (request, reply) => {
     const bodyResult = CreateWorkspaceRequestSchema.safeParse(request.body);
     if (!bodyResult.success) {
       throw VALIDATION_FAILED({ issues: bodyResult.error.issues });
     }
 
-    const ownerIdResult = (request.body as { ownerId?: unknown }).ownerId;
-    if (typeof ownerIdResult !== "string" || ownerIdResult.length === 0) {
-      throw VALIDATION_FAILED({
-        issues: [{ path: ["ownerId"], message: "ownerId is required (temporary pre-auth field)" }],
-      });
-    }
+    const ownerId = request.user!.id;
 
     const existing = await prisma.workspace.findUnique({ where: { slug: bodyResult.data.slug } });
     if (existing) {
@@ -56,11 +45,11 @@ export async function workspaceRoutes(app: FastifyInstance): Promise<void> {
         data: {
           slug: bodyResult.data.slug,
           displayName: bodyResult.data.name,
-          ownerId: ownerIdResult,
+          ownerId,
         },
       });
       await tx.workspaceMember.create({
-        data: { workspaceId: ws.id, userId: ownerIdResult, role: "OWNER" },
+        data: { workspaceId: ws.id, userId: ownerId, role: "OWNER" },
       });
       return ws;
     });
@@ -69,8 +58,9 @@ export async function workspaceRoutes(app: FastifyInstance): Promise<void> {
     return toDto(workspace);
   });
 
-  app.get("/v1/workspaces/:id", async (request) => {
+  app.get("/v1/workspaces/:id", { preHandler: requireAuth }, async (request) => {
     const { id } = request.params as { id: string };
+    await requireWorkspaceRole(request, id, "VIEWER");
     const workspace = await prisma.workspace.findUnique({ where: { id } });
     if (!workspace) throw NOT_FOUND("Workspace");
     return toDto(workspace);

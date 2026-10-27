@@ -1,8 +1,8 @@
-import { randomUUID } from "node:crypto";
 import { REFERENCE_PONS_TOKEN, ROBINHOOD_CHAIN_ID } from "@afterpost/chain-pons";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildServer } from "../../server.js";
 import { prisma } from "../../lib/prisma.js";
+import { signupWithWorkspace } from "../../test-support/auth-helpers.js";
 
 /**
  * Real integration test exercising the full first-session journey (PRD
@@ -28,6 +28,7 @@ describe("Campaign creation flow (live RPC + live Postgres)", () => {
     await prisma.partner.deleteMany({ where: { workspaceId: { in: cleanup.workspaceIds } } });
     await prisma.token.deleteMany({ where: { workspaceId: { in: cleanup.workspaceIds } } });
     await prisma.project.deleteMany({ where: { workspaceId: { in: cleanup.workspaceIds } } });
+    await prisma.session.deleteMany({ where: { userId: { in: cleanup.userIds } } });
     await prisma.workspaceMember.deleteMany({
       where: { workspaceId: { in: cleanup.workspaceIds } },
     });
@@ -37,22 +38,18 @@ describe("Campaign creation flow (live RPC + live Postgres)", () => {
   });
 
   it("creates a full campaign with deliverables through workspace -> project -> partner -> campaign", async () => {
-    // #given — a real user and workspace
-    const user = await prisma.user.create({ data: { email: `${randomUUID()}@afterpost.test` } });
-    cleanup.userIds.push(user.id);
-
-    const workspaceResponse = await app.inject({
-      method: "POST",
-      url: "/v1/workspaces",
-      payload: { name: "Flow Test", slug: `ws-${randomUUID().slice(0, 8)}`, ownerId: user.id },
-    });
-    const workspaceId = workspaceResponse.json().id;
-    cleanup.workspaceIds.push(workspaceId);
+    // #given — a real authenticated user with a workspace
+    const account = await signupWithWorkspace(app, "Flow Test");
+    cleanup.userIds.push(account.userId);
+    cleanup.workspaceIds.push(account.workspaceId);
+    const { workspaceId, token } = account;
+    const authHeaders = { authorization: `Bearer ${token}` };
 
     // #when — project with real onchain-verified token
     const projectResponse = await app.inject({
       method: "POST",
       url: "/v1/projects",
+      headers: authHeaders,
       payload: {
         workspaceId,
         name: "Flow Test Project",
@@ -68,6 +65,7 @@ describe("Campaign creation flow (live RPC + live Postgres)", () => {
     const partnerResponse = await app.inject({
       method: "POST",
       url: "/v1/partners",
+      headers: authHeaders,
       payload: { workspaceId, displayName: "Test Partner", handle: "@testpartner" },
     });
     expect(partnerResponse.statusCode).toBe(201);
@@ -77,6 +75,7 @@ describe("Campaign creation flow (live RPC + live Postgres)", () => {
     const campaignResponse = await app.inject({
       method: "POST",
       url: "/v1/campaigns",
+      headers: authHeaders,
       payload: {
         workspaceId,
         projectId,
@@ -110,7 +109,11 @@ describe("Campaign creation flow (live RPC + live Postgres)", () => {
     expect(campaign.deliverables[0].kind).toBe("POST");
 
     // Fetching it back returns the same real persisted data.
-    const getResponse = await app.inject({ method: "GET", url: `/v1/campaigns/${campaign.id}` });
+    const getResponse = await app.inject({
+      method: "GET",
+      url: `/v1/campaigns/${campaign.id}`,
+      headers: authHeaders,
+    });
     expect(getResponse.statusCode).toBe(200);
     expect(getResponse.json().deliverables).toHaveLength(2);
   }, 30_000);

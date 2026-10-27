@@ -23,7 +23,8 @@ function splitWords(root: HTMLElement) {
           }
           const w = document.createElement("span");
           w.className = "w";
-          w.style.cssText = "display:inline-block;overflow:hidden;vertical-align:top;padding-bottom:.12em;margin-bottom:-.12em";
+          w.style.cssText =
+            "display:inline-block;overflow:hidden;vertical-align:top;padding-bottom:.12em;margin-bottom:-.12em";
           const i = document.createElement("span");
           i.className = "w-i";
           i.style.cssText = "display:inline-block;will-change:transform";
@@ -51,7 +52,11 @@ export function MotionProvider() {
       document.documentElement.classList.add("reduced");
       return;
     }
-    const lenis = new Lenis({ duration: 1.25, easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)), smoothWheel: true });
+    const lenis = new Lenis({
+      duration: 1.25,
+      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+      smoothWheel: true,
+    });
     lenis.on("scroll", ScrollTrigger.update);
     const tick = (t: number) => lenis.raf(t * 1000);
     gsap.ticker.add(tick);
@@ -139,7 +144,12 @@ export function MotionProvider() {
           gsap.to(el, {
             yPercent: amt * 100,
             ease: "none",
-            scrollTrigger: { trigger: el.parentElement ?? el, start: "top bottom", end: "bottom top", scrub: 0.8 },
+            scrollTrigger: {
+              trigger: el.parentElement ?? el,
+              start: "top bottom",
+              end: "bottom top",
+              scrub: 0.8,
+            },
           });
         });
 
@@ -149,7 +159,14 @@ export function MotionProvider() {
             gsap.fromTo(
               el,
               { scale: 0.78, rotateX: 14, y: 80, opacity: 0.4, transformOrigin: "50% 100%" },
-              { scale: 1, rotateX: 0, y: 0, opacity: 1, ease: "none", scrollTrigger: { trigger: el, start: "top 100%", end: "top 25%", scrub: 0.9 } },
+              {
+                scale: 1,
+                rotateX: 0,
+                y: 0,
+                opacity: 1,
+                ease: "none",
+                scrollTrigger: { trigger: el, start: "top 100%", end: "top 25%", scrub: 0.9 },
+              },
             );
           });
         });
@@ -158,7 +175,13 @@ export function MotionProvider() {
             gsap.fromTo(
               el,
               { scale: 0.94, y: 40, opacity: 0.5 },
-              { scale: 1, y: 0, opacity: 1, ease: "none", scrollTrigger: { trigger: el, start: "top 100%", end: "top 55%", scrub: 0.7 } },
+              {
+                scale: 1,
+                y: 0,
+                opacity: 1,
+                ease: "none",
+                scrollTrigger: { trigger: el, start: "top 100%", end: "top 55%", scrub: 0.7 },
+              },
             );
           });
         });
@@ -199,7 +222,12 @@ export function MotionProvider() {
             y: (i % 2 ? -1 : 1) * 160,
             x: (i % 2 ? 1 : -1) * 80,
             ease: "none",
-            scrollTrigger: { trigger: el.parentElement ?? el, start: "top bottom", end: "bottom top", scrub: 1.2 },
+            scrollTrigger: {
+              trigger: el.parentElement ?? el,
+              start: "top bottom",
+              end: "bottom top",
+              scrub: 1.2,
+            },
           });
         });
 

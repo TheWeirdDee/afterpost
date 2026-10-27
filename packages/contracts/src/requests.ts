@@ -2,6 +2,41 @@ import { z } from "zod";
 import { CampaignGoalSchema, DeliverableKindSchema } from "./enums.js";
 import { EvmAddressSchema, IsoDateTimeSchema, MoneySchema } from "./common.js";
 
+// Mirrors the local Zetaris platform's own password policy (verified in
+// ~/zetaris-platform/README.md): >=8 chars, lower+upper+digit+one of
+// $ @ ! % * ? & — a reasonable standard, not arbitrary.
+const PASSWORD_SCHEMA = z
+  .string()
+  .min(8, "at least 8 characters")
+  .regex(/[a-z]/, "needs a lowercase letter")
+  .regex(/[A-Z]/, "needs an uppercase letter")
+  .regex(/[0-9]/, "needs a digit")
+  .regex(/[$@!%*?&]/, "needs one of $ @ ! % * ? &");
+
+export const SignupRequestSchema = z.object({
+  email: z.string().email(),
+  password: PASSWORD_SCHEMA,
+  name: z.string().min(1).max(200).optional(),
+});
+export type SignupRequest = z.infer<typeof SignupRequestSchema>;
+
+export const LoginRequestSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(1),
+});
+export type LoginRequest = z.infer<typeof LoginRequestSchema>;
+
+export const RequestPasswordResetRequestSchema = z.object({
+  email: z.string().email(),
+});
+export type RequestPasswordResetRequest = z.infer<typeof RequestPasswordResetRequestSchema>;
+
+export const ConfirmPasswordResetRequestSchema = z.object({
+  token: z.string().min(1),
+  newPassword: PASSWORD_SCHEMA,
+});
+export type ConfirmPasswordResetRequest = z.infer<typeof ConfirmPasswordResetRequestSchema>;
+
 export const CreateWorkspaceRequestSchema = z.object({
   name: z.string().min(1).max(120),
   slug: z

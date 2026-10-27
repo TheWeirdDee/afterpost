@@ -18,15 +18,19 @@ model User {
   email           String    @unique
   name            String?
   avatarUrl       String?   @map("avatar_url")
+  // Null for accounts created via OAuth only (no password set).
+  passwordHash    String?   @map("password_hash")
   emailVerifiedAt DateTime? @map("email_verified_at") @db.Timestamptz
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
-  authAccounts      AuthAccount[]
-  workspaceMembers  WorkspaceMember[]
-  ownedWorkspaces   Workspace[]       @relation("WorkspaceOwner")
-  auditEventsActed  AuditEvent[]      @relation("AuditActor")
-  notifications     Notification[]
-  evidenceUploaded  Evidence[]        @relation("EvidenceUploader")
+  authAccounts       AuthAccount[]
+  sessions           Session[]
+  passwordResetTokens PasswordResetToken[]
+  workspaceMembers   WorkspaceMember[]
+  ownedWorkspaces    Workspace[]          @relation("WorkspaceOwner")
+  auditEventsActed   AuditEvent[]         @relation("AuditActor")
+  notifications      Notification[]
+  evidenceUploaded   Evidence[]           @relation("EvidenceUploader")
 
   @@map("users")
 }
@@ -42,6 +46,37 @@ model AuthAccount {
 
   @@unique([provider, providerAccountId])
   @@map("auth_accounts")
+}
+
+// Opaque bearer session (PRD §12.1: "short-lived scoped API tokens").
+// Only tokenHash is stored — the raw token is shown to the client once.
+model Session {
+  id         String    @id @default(uuid())
+  userId     String    @map("user_id")
+  tokenHash  String    @unique @map("token_hash")
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz
+  userAgent  String?   @map("user_agent")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  tokenHash String    @unique @map("token_hash")
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz
+  usedAt    DateTime? @map("used_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
 }
 
 model Workspace {
