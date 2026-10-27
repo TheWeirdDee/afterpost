@@ -1,0 +1,2 @@
+{"memoryId":"5ab043ef-4ab9-42cb-b587-59e3179c53ec","action":"create","actor":"chain-indexer-agent","timestamp":"2026-10-27T21:49:23.925Z","details":{"layer":"long_term","source":"chain_indexer"}}
+{"memoryId":"5ab043ef-4ab9-42cb-b587-59e3179c53ec","action":"feedback","actor":"verifier-agent","timestamp":"2026-10-27T21:49:23.927Z","details":{"verdict":"helpful","previousConfidence":0.6,"newConfidence":0.65}}

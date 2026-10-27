@@ -1,0 +1,22 @@
+{
+  "name": "@afterpost/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "demo:investigation": "tsx src/demo-investigation.ts"
+  },
+  "dependencies": {
+    "@afterpost/chain-pons": "workspace:*",
+    "@afterpost/domain": "workspace:*",
+    "@afterpost/meterless-hmem": "workspace:*",
+    "@afterpost/meterless-world-model": "workspace:*",
+    "@afterpost/model-generator": "workspace:*",
+    "@afterpost/shared-store": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}
