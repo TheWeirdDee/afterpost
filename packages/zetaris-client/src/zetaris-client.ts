@@ -72,14 +72,29 @@ export class ZetarisClient {
       throw new Error(`Zetaris query failed: ${response.status} ${response.statusText} — ${text}`);
     }
 
-    const body = JSON.parse(text) as { rows?: Array<Record<string, string>> } & Record<string, unknown>;
-    const rows = body.rows ?? [];
+    // Real field names confirmed live against the local platform
+    // (docs/INTEGRATIONS.md) — the response uses `records`, not `rows`,
+    // and carries real pagination state including a resumable queryToken.
+    const body = JSON.parse(text) as {
+      records?: Array<Record<string, string>>;
+      pageNumber?: number;
+      pageLimit?: number;
+      totalCount?: number;
+      totalPages?: number;
+      queryToken?: string;
+    };
+    const rows = body.records ?? [];
 
     return {
       rows,
       rowCount: rows.length,
       requestId,
       durationMs: Date.now() - startedAt,
+      pageNumber: body.pageNumber ?? 1,
+      pageLimit: body.pageLimit ?? pageLimit,
+      totalCount: body.totalCount ?? rows.length,
+      totalPages: body.totalPages ?? 1,
+      queryToken: body.queryToken ?? null,
     };
   }
 }

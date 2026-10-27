@@ -84,9 +84,13 @@ export class WorldModelService {
    */
   async getEntityState(entityKey: string): Promise<EntityState | null> {
     const all = await this.store.readAll();
-    const superseded = new Set(all.map((e) => e.supersedesEventId).filter((id): id is string => id !== null));
+    const superseded = new Set(
+      all.map((e) => e.supersedesEventId).filter((id): id is string => id !== null),
+    );
     const relevant = all
-      .filter((e) => e.entityKey === entityKey && e.eventType !== "relation" && !superseded.has(e.id))
+      .filter(
+        (e) => e.entityKey === entityKey && e.eventType !== "relation" && !superseded.has(e.id),
+      )
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 
     if (relevant.length === 0) return null;

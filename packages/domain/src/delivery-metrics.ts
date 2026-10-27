@@ -3,11 +3,7 @@
  */
 
 export type DeliverableVerificationState =
-  | "verified_fulfilled"
-  | "user_confirmed_fulfilled"
-  | "unresolved"
-  | "late"
-  | "missed";
+  "verified_fulfilled" | "user_confirmed_fulfilled" | "unresolved" | "late" | "missed";
 
 export interface DeliverableOutcome {
   deliverableId: string;

@@ -25,7 +25,12 @@ export type MemoryInput = Pick<
   MemoryRecord,
   "content" | "type" | "layer" | "tags" | "source" | "agentId" | "runId"
 > &
-  Partial<Pick<MemoryRecord, "confidence" | "domain" | "entities" | "taskId" | "supersedes" | "derivedFrom">>;
+  Partial<
+    Pick<
+      MemoryRecord,
+      "confidence" | "domain" | "entities" | "taskId" | "supersedes" | "derivedFrom"
+    >
+  >;
 
 /** Audit ledger entry (H-MEM engine doc §11.1). JSONL-shippable to logs/. */
 export interface TrustLedgerEntry {

@@ -5,11 +5,7 @@
  */
 
 export type SuggestedAction =
-  | "renew"
-  | "conditional_trial"
-  | "request_evidence"
-  | "do_not_renew"
-  | "insufficient_data";
+  "renew" | "conditional_trial" | "request_evidence" | "do_not_renew" | "insufficient_data";
 
 export interface RenewalPolicyInput {
   policyVersion: string;

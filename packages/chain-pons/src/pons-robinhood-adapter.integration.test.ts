@@ -28,20 +28,18 @@ describe.sequential("PonsRobinhoodAdapter (live RPC)", () => {
     expect(identity.totalSupplyRaw).toMatch(/^\d+$/);
   });
 
-  it(
-    "discovers and independently verifies the reference pool via token0/token1",
-    async () => {
-      // #given
-      const token = REFERENCE_PONS_TOKEN;
-      // #when
-      const pools = await adapter.discoverPools(token);
-      // #then
-      expect(pools.length).toBeGreaterThan(0);
-      const matched = pools.find((p) => p.address.toLowerCase() === REFERENCE_PONS_POOL.toLowerCase());
-      expect(matched).toBeDefined();
-    },
-    30_000,
-  );
+  it("discovers and independently verifies the reference pool via token0/token1", async () => {
+    // #given
+    const token = REFERENCE_PONS_TOKEN;
+    // #when
+    const pools = await adapter.discoverPools(token);
+    // #then
+    expect(pools.length).toBeGreaterThan(0);
+    const matched = pools.find(
+      (p) => p.address.toLowerCase() === REFERENCE_PONS_POOL.toLowerCase(),
+    );
+    expect(matched).toBeDefined();
+  }, 30_000);
 
   it("resolves the real documented reference launch transaction", async () => {
     // #given

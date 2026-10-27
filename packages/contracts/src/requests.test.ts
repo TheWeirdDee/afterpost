@@ -14,7 +14,12 @@ describe("CreateCampaignRequestSchema", () => {
       agreedFee: { amount: "500.00", currency: "USD" },
       deliverables: [
         { kind: "POST", channel: "x", quantity: 2, dueAt: "2026-10-25T18:00:00Z" },
-        { kind: "COMMUNITY_MENTION", channel: "telegram", quantity: 1, dueAt: "2026-10-26T18:00:00Z" },
+        {
+          kind: "COMMUNITY_MENTION",
+          channel: "telegram",
+          quantity: 1,
+          dueAt: "2026-10-26T18:00:00Z",
+        },
       ],
     };
     // #when

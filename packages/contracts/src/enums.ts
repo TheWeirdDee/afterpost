@@ -3,7 +3,13 @@ import { z } from "zod";
 /** Mirrors prisma/schema.prisma enums exactly. Keep in sync by hand — no
  * codegen wired up yet. If this drifts from the schema, the schema wins. */
 
-export const WorkspaceRoleSchema = z.enum(["OWNER", "ADMIN", "ANALYST", "VIEWER", "PROMOTER_PORTAL"]);
+export const WorkspaceRoleSchema = z.enum([
+  "OWNER",
+  "ADMIN",
+  "ANALYST",
+  "VIEWER",
+  "PROMOTER_PORTAL",
+]);
 export const ProjectStatusSchema = z.enum(["ACTIVE", "ARCHIVED"]);
 export const PartnerStatusSchema = z.enum([
   "CANDIDATE",
@@ -19,7 +25,13 @@ export const CampaignGoalSchema = z.enum([
   "RETENTION",
   "OTHER",
 ]);
-export const CampaignStatusSchema = z.enum(["DRAFT", "ACTIVE", "IN_REVIEW", "COMPLETED", "CANCELLED"]);
+export const CampaignStatusSchema = z.enum([
+  "DRAFT",
+  "ACTIVE",
+  "IN_REVIEW",
+  "COMPLETED",
+  "CANCELLED",
+]);
 export const PaymentStatusSchema = z.enum([
   "AGREED",
   "INVOICE_RECEIVED",
@@ -92,11 +104,33 @@ export const RunStatusSchema = z.enum([
   "FAILED",
   "CANCELLED",
 ]);
-export const ClaimTypeSchema = z.enum(["DELIVERY", "MARKET_OBSERVATION", "ATTRIBUTED_ACQUISITION", "LIMITATION"]);
-export const FindingStatusSchema = z.enum(["SUPPORTED", "PARTIALLY_SUPPORTED", "UNRESOLVED", "CONTRADICTED"]);
+export const ClaimTypeSchema = z.enum([
+  "DELIVERY",
+  "MARKET_OBSERVATION",
+  "ATTRIBUTED_ACQUISITION",
+  "LIMITATION",
+]);
+export const FindingStatusSchema = z.enum([
+  "SUPPORTED",
+  "PARTIALLY_SUPPORTED",
+  "UNRESOLVED",
+  "CONTRADICTED",
+]);
 export const AttributionLanguageSchema = z.enum(["none", "observed_only", "tracked_verified"]);
-export const CoverageStatusSchema = z.enum(["COMPLETE", "PARTIAL", "STALE", "UNAVAILABLE", "NOT_APPLICABLE"]);
-export const ReportStatusSchema = z.enum(["DRAFT", "NEEDS_REVIEW", "APPROVED", "DISPUTED", "SUPERSEDED"]);
+export const CoverageStatusSchema = z.enum([
+  "COMPLETE",
+  "PARTIAL",
+  "STALE",
+  "UNAVAILABLE",
+  "NOT_APPLICABLE",
+]);
+export const ReportStatusSchema = z.enum([
+  "DRAFT",
+  "NEEDS_REVIEW",
+  "APPROVED",
+  "DISPUTED",
+  "SUPERSEDED",
+]);
 export const SuggestedActionSchema = z.enum([
   "renew",
   "conditional_trial",

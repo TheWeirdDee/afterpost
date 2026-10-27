@@ -20,7 +20,11 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { PonsRobinhoodAdapter, REFERENCE_PONS_TOKEN } from "@afterpost/chain-pons";
 import { noModelGenerator } from "@afterpost/model-generator";
-import { MemoryStoreService, TrustLedgerService, retrieveMemories } from "@afterpost/meterless-hmem";
+import {
+  MemoryStoreService,
+  TrustLedgerService,
+  retrieveMemories,
+} from "@afterpost/meterless-hmem";
 import { WorldModelService } from "@afterpost/meterless-world-model";
 
 const LOG_DIR = join(process.cwd(), "..", "..", "logs");
@@ -40,10 +44,21 @@ interface TraceStep {
 const trace: TraceStep[] = [];
 let seq = 0;
 
-async function traced<T>(step: string, detail: Record<string, unknown>, fn: () => Promise<T>): Promise<T> {
+async function traced<T>(
+  step: string,
+  detail: Record<string, unknown>,
+  fn: () => Promise<T>,
+): Promise<T> {
   const startedAt = new Date().toISOString();
   const result = await fn();
-  trace.push({ seq: seq++, runId: RUN_ID, step, startedAt, finishedAt: new Date().toISOString(), detail });
+  trace.push({
+    seq: seq++,
+    runId: RUN_ID,
+    step,
+    startedAt,
+    finishedAt: new Date().toISOString(),
+    detail,
+  });
   return result;
 }
 
@@ -75,26 +90,23 @@ async function main(): Promise<void> {
   const tokenEntityKey = `token:${token.address.toLowerCase()}`;
 
   console.log("[run] ingesting the observation into World Model (idempotent)...");
-  const ingestResult = await traced(
-    "world_model_ingest_token",
-    { entityKey: tokenEntityKey },
-    () =>
-      worldModel.ingest({
-        workspaceId: WORKSPACE_ID,
-        entityKey: tokenEntityKey,
-        entityType: "token",
-        eventType: "created",
-        payload: {
-          symbol: token.symbol,
-          name: token.name,
-          decimals: token.decimals,
-          totalSupplyRaw: token.totalSupplyRaw,
-        },
-        sourceRef: `chain:4663/token/${token.address.toLowerCase()}`,
-        supersedesEventId: null,
-        agentId: AGENT_ID,
-        runId: RUN_ID,
-      }),
+  const ingestResult = await traced("world_model_ingest_token", { entityKey: tokenEntityKey }, () =>
+    worldModel.ingest({
+      workspaceId: WORKSPACE_ID,
+      entityKey: tokenEntityKey,
+      entityType: "token",
+      eventType: "created",
+      payload: {
+        symbol: token.symbol,
+        name: token.name,
+        decimals: token.decimals,
+        totalSupplyRaw: token.totalSupplyRaw,
+      },
+      sourceRef: `chain:4663/token/${token.address.toLowerCase()}`,
+      supersedesEventId: null,
+      agentId: AGENT_ID,
+      runId: RUN_ID,
+    }),
   );
   console.log(`  -> event ${ingestResult.event.id}, wasNew=${ingestResult.wasNew}`);
 
@@ -130,7 +142,11 @@ async function main(): Promise<void> {
         entityKey: poolEntityKey,
         entityType: "observation",
         eventType: "created",
-        payload: { token0: pool.token0, token1: pool.token1, discoveredAtBlock: pool.discoveredAtBlock.toString() },
+        payload: {
+          token0: pool.token0,
+          token1: pool.token1,
+          discoveredAtBlock: pool.discoveredAtBlock.toString(),
+        },
         sourceRef: `chain:4663/pool/${pool.address.toLowerCase()}`,
         supersedesEventId: null,
         agentId: AGENT_ID,
@@ -148,7 +164,9 @@ async function main(): Promise<void> {
     );
   }
 
-  console.log("[run] mining an H-MEM memory from this run's observations (no-model fallback, sample mode)...");
+  console.log(
+    "[run] mining an H-MEM memory from this run's observations (no-model fallback, sample mode)...",
+  );
   const summaryPrompt = `Reference token verified: ${token.symbol} at ${token.address}, pool ${pool?.address ?? "unresolved"}, chain 4663.`;
   const generated = await traced("mine_memory_no_model_fallback", { prompt: summaryPrompt }, () =>
     noModelGenerator(summaryPrompt, undefined, undefined),
@@ -171,14 +189,23 @@ async function main(): Promise<void> {
   // Second "run": a fresh store instance over the same file, simulating a
   // new process retrieving what a previous run learned.
   console.log("[run] simulating a second, later investigation retrieving this run's memory...");
-  const laterMemoryStore = new MemoryStoreService(join(LOG_DIR, "hmem-memories.jsonl"), trustLedger);
+  const laterMemoryStore = new MemoryStoreService(
+    join(LOG_DIR, "hmem-memories.jsonl"),
+    trustLedger,
+  );
   const allMemories = await laterMemoryStore.allCurrent();
   const retrieval = await traced(
     "hmem_retrieve_in_second_run",
     { query: `verification status of token ${token.symbol}` },
-    async () => retrieveMemories(allMemories, { query: `token ${token.symbol} onchain verification`, runId: RUN_ID }),
+    async () =>
+      retrieveMemories(allMemories, {
+        query: `token ${token.symbol} onchain verification`,
+        runId: RUN_ID,
+      }),
   );
-  console.log(`  -> retrieved ${retrieval.results.length} relevant memor${retrieval.results.length === 1 ? "y" : "ies"}`);
+  console.log(
+    `  -> retrieved ${retrieval.results.length} relevant memor${retrieval.results.length === 1 ? "y" : "ies"}`,
+  );
 
   if (retrieval.results[0]) {
     await traced("hmem_feedback_helpful", { memoryId: retrieval.results[0].memory.id }, () =>
@@ -186,8 +213,10 @@ async function main(): Promise<void> {
     );
   }
 
-  const entityState = await traced("world_model_read_entity_state", { entityKey: tokenEntityKey }, () =>
-    worldModel.getEntityState(tokenEntityKey),
+  const entityState = await traced(
+    "world_model_read_entity_state",
+    { entityKey: tokenEntityKey },
+    () => worldModel.getEntityState(tokenEntityKey),
   );
   console.log(`[run] final World Model state for ${tokenEntityKey}:`, entityState?.fields);
 

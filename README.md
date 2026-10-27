@@ -1,5 +1,7 @@
 # Afterpost
 
+[![CI](https://github.com/winsznx/afterpost/actions/workflows/ci.yml/badge.svg)](https://github.com/winsznx/afterpost/actions/workflows/ci.yml)
+
 Know what your promoters delivered. Compare what you paid for with the posts
 that went live, the transactions you can verify, and what remains unknown.
 
@@ -61,13 +63,51 @@ is asserted that hasn't actually run.
     **not** implemented — the engines' own guidance is to keep it optional
     unless a long-running investigation genuinely needs it, and nothing in
     the current build runs long enough to justify it.
+- **A real Fastify API (`apps/api`) against a real local Postgres/Redis**
+  (`infra/docker-compose.yml`), not just route handlers that compile:
+  - `GET /health/ready` performs actual Postgres + Redis connectivity
+    checks, not a hardcoded 200.
+  - `POST /v1/projects` calls the live chain adapter's `validateToken()`
+    over the real RPC before writing any row — a malformed address or a
+    real RPC failure surfaces as a genuine `422 TOKEN_NOT_VERIFIED`.
+  - The full PRD §4.1 first-session journey works end to end against real
+    services: workspace → onchain-verified project → partner → campaign
+    with deliverables → attach evidence → **generate a renewal report
+    through the actual `packages/domain` renewal-policy engine**, which
+    with zero evidence linked correctly returns `request_evidence`, never
+    a guessed outcome.
+  - Tenant isolation is enforced and tested: a cross-workspace write
+    attempt returns a structured 404, not a data leak.
+  - 16/16 integration tests, run with `app.inject()` against the real
+    Fastify pipeline and the real database — see "Running the verified
+    parts" below.
+- **A real chain indexer job** (`apps/worker/src/jobs/chain-sync.ts`)
+  persisting Swap/Transfer observations from the live chain adapter into
+  Postgres, upserted by the canonical composite key so re-ingestion never
+  duplicates a row. Finding a real bug along the way is in
+  `docs/INTEGRATIONS.md`.
+- **GitHub Actions CI** (`.github/workflows/ci.yml`) running on every push:
+  credential-free typecheck + unit tests, the live chain integration
+  tests, and a full Postgres migration + API integration test suite
+  against real service containers — not just locally, in the cloud.
+
+- **Zetaris, including the sponsor-removal test.** The local platform
+  (Docker Compose) is up, verified, and queried for real through
+  `packages/zetaris-client`. A single query joined two independently
+  registered, physically distinct sources (a CSV dataset and a Parquet
+  dataset, different S3 locations) through real Spark in ~41 seconds —
+  not a disguised local join. The REST contract (`records`, not `rows`;
+  real pagination fields) was discovered from the platform's own response,
+  not assumed from generic docs. Full evidence, including a real
+  diagnosed-and-fixed performance issue, in `docs/INTEGRATIONS.md`.
 
 **In progress / not yet verified:**
 
-- Zetaris federated query layer — the local Docker Compose platform is
-  being provisioned (image pull in progress as of this submission; it is a
-  large, slow pull and may not finish before the deadline). No live query
-  has run yet. Tracked honestly in `docs/INTEGRATIONS.md`.
+- Registering genuine Afterpost-specific sources (the campaign/evidence/
+  chain-event tables) into Zetaris and querying those, rather than the
+  platform's own bootstrapped sample data — the proof above establishes
+  the federated-query mechanism works; wiring in Afterpost's actual
+  business data is the remaining step.
 - Meterless Nightshift as the primary LLM provider, routing NVIDIA Nemotron
   inference — the connector is implemented
   (`packages/model-generator/src/nightshift-generator.ts`, an injected
@@ -78,8 +118,11 @@ is asserted that hasn't actually run.
   Meterless engine docs themselves specify as the sample-mode degradation
   path — every such result is tagged `isFallback: true` and never reported
   as a real inference call.
-- The Fastify API, Auth.js, the agent state machine, and the Next.js UI are
-  not yet built.
+- Auth.js (no real authentication wired up yet — API routes accept a
+  temporary, honestly-labelled `ownerId`/`workspaceId` field in the request
+  body in place of a verified session), the agent state machine, and the
+  Next.js UI (`apps/web`, being built by an invited collaborator — see
+  `docs/FRONTEND_HANDOFF.md`) are not yet built.
 
 ## Why this matters
 
@@ -95,50 +138,67 @@ of collapsing them into a misleading single score.
 ## Repository layout
 
 ```text
+apps/api/                      Fastify API — real Postgres/Redis, real route handlers
+apps/worker/                   chain indexer job + the live demo investigation script
+apps/web/                      (not started — see docs/FRONTEND_HANDOFF.md)
 packages/domain/               deterministic metric calculators and policy engine
 packages/chain-pons/           read-only ChainAdapter for Robinhood Chain / pons
+packages/zetaris-client/       client for the local Zetaris platform's real REST contract
 packages/meterless-world-model/  Meterless World Model Agent Engine (real, tested)
 packages/meterless-hmem/       Meterless H-MEM Agent Engine (real, tested)
 packages/model-generator/      provider-agnostic generator seam + Nightshift connector
 packages/shared-store/         append-only JSONL store + stable content-hash IDs
-packages/contracts/            (planned) shared Zod DTOs between API and web
+packages/contracts/            shared Zod DTOs between API and web
 packages/ui/                   (planned) shared UI components
-apps/worker/                   real end-to-end demo tying chain data + both engines together
-prisma/schema.prisma           full relational data model
-docs/                          integration status, architecture notes
-infra/                         environment variable reference, deployment config
+prisma/schema.prisma           full relational data model, migrated and verified
+infra/docker-compose.yml       local Postgres + Redis for development
+docs/                          integration status, architecture, frontend handoff
 logs/                          committed JSONL evidence from the real demo run
+.github/workflows/ci.yml       real CI: typecheck, unit tests, live-service integration tests
 ```
 
 ## Running the verified parts from a clean checkout
 
 ```bash
 pnpm install
+cp .env.example .env   # DB/Redis defaults already point at the compose services below
 
-# Deterministic domain logic — no network, no credentials
+# Deterministic domain + Meterless engines — no network, no credentials
 pnpm --filter @afterpost/domain test:unit
+pnpm --filter @afterpost/meterless-world-model test:unit
+pnpm --filter @afterpost/meterless-hmem test:unit
 
 # Live chain adapter — hits the real public Robinhood Chain RPC, no credentials needed
 pnpm --filter @afterpost/chain-pons test:unit
 pnpm --filter @afterpost/chain-pons test:integration
 
-# Meterless World Model and H-MEM engines — no network, no credentials
-pnpm --filter @afterpost/meterless-world-model test:unit
-pnpm --filter @afterpost/meterless-hmem test:unit
-
 # Real end-to-end demo: live chain data -> World Model -> H-MEM -> JSONL trace
 pnpm --filter @afterpost/worker demo:investigation
+
+# Local Postgres + Redis, then the real API against them
+docker compose -f infra/docker-compose.yml up -d
+pnpm exec prisma migrate deploy --schema prisma/schema.prisma
+pnpm exec prisma generate --schema prisma/schema.prisma
+pnpm --filter @afterpost/api test:integration   # full first-session journey, real DB
+pnpm --filter @afterpost/worker test:integration # real chain indexer sync
+pnpm --filter @afterpost/api dev                 # serves on :8787
 ```
 
-Copy `.env.example` to `.env` and fill in credentials to work on the parts
-that need them (see comments in that file for where each value comes from).
+Fill in the rest of `.env` with real credentials to work on the parts that
+need them (see comments in that file for exactly where each value comes
+from — Zetaris, Nightshift, object storage, OAuth, etc).
 
 ## Sponsor technology
 
-- **Zetaris** — intended as the federated query layer joining campaign
+- **Zetaris** — the federated query layer intended to join campaign
   commitments, promotional evidence, and indexed chain events as genuinely
-  separate registered sources. The local platform (Docker Compose) is being
-  provisioned; no live query has run yet. See `docs/INTEGRATIONS.md`.
+  separate registered sources. Verified live: the local platform is up,
+  `packages/zetaris-client` is built against its real (reverse-engineered,
+  not publicly documented) REST contract, and a genuine federated query
+  joining two independently registered, physically distinct sources
+  executed through real Spark — the PRD's own "sponsor-removal test." Full
+  evidence in `docs/INTEGRATIONS.md`. Wiring in Afterpost's own business
+  data (vs. the platform's bootstrapped samples) is the remaining step.
 - **Meterless** — two Agent Engines implemented as real, tested services:
   - **World Model** at `packages/meterless-world-model` — idempotent
     append-only ingest, provenance-backed entity state, relationships.

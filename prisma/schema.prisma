@@ -993,12 +993,15 @@ enum ReportStatus {
   SUPERSEDED
 }
 
+// Lowercase to match the PRD's own documented values (§8.4, §10.4
+// AgentDraftSchema) exactly, which packages/domain and packages/contracts
+// already use — this enum must not drift from that shared vocabulary.
 enum SuggestedAction {
-  RENEW
-  CONDITIONAL_TRIAL
-  REQUEST_EVIDENCE
-  DO_NOT_RENEW
-  INSUFFICIENT_DATA
+  renew
+  conditional_trial
+  request_evidence
+  do_not_renew
+  insufficient_data
 }
 
 model Report {
