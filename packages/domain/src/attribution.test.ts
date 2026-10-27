@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { evaluateQualifyingConversion, selectEligibleAssociation } from "./attribution.js";
-import type { AttributionPolicy, CandidateChainAcquisition, WalletAssociation } from "./attribution.js";
+import type {
+  AttributionPolicy,
+  CandidateChainAcquisition,
+  WalletAssociation,
+} from "./attribution.js";
 
 const POLICY: AttributionPolicy = {
   version: "v1",
@@ -20,7 +24,9 @@ function makeAssociation(overrides: Partial<WalletAssociation> = {}): WalletAsso
   };
 }
 
-function makeAcquisition(overrides: Partial<CandidateChainAcquisition> = {}): CandidateChainAcquisition {
+function makeAcquisition(
+  overrides: Partial<CandidateChainAcquisition> = {},
+): CandidateChainAcquisition {
   return {
     walletAddress: "0xabc",
     campaignId: "cmp_1",
@@ -102,8 +108,14 @@ describe("evaluateQualifyingConversion", () => {
 describe("selectEligibleAssociation", () => {
   it("credits only one association under last-touch when two links were clicked", () => {
     // #given — PRD §8.5: two tracking links clicked by same opted-in wallet
-    const earlier = makeAssociation({ trackingLinkId: "trk_early", signedAt: new Date("2026-10-01T00:00:00Z") });
-    const later = makeAssociation({ trackingLinkId: "trk_late", signedAt: new Date("2026-10-02T00:00:00Z") });
+    const earlier = makeAssociation({
+      trackingLinkId: "trk_early",
+      signedAt: new Date("2026-10-01T00:00:00Z"),
+    });
+    const later = makeAssociation({
+      trackingLinkId: "trk_late",
+      signedAt: new Date("2026-10-02T00:00:00Z"),
+    });
     // #when
     const selected = selectEligibleAssociation(
       [earlier, later],
@@ -118,7 +130,11 @@ describe("selectEligibleAssociation", () => {
     // #given
     const future = makeAssociation({ signedAt: new Date("2026-11-01T00:00:00Z") });
     // #when
-    const selected = selectEligibleAssociation([future], new Date("2026-10-03T00:00:00Z"), "last_touch");
+    const selected = selectEligibleAssociation(
+      [future],
+      new Date("2026-10-03T00:00:00Z"),
+      "last_touch",
+    );
     // #then
     expect(selected).toBeNull();
   });

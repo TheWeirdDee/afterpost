@@ -19,7 +19,11 @@ describe("ZetarisClient", () => {
         }),
     });
     vi.stubGlobal("fetch", fakeFetch);
-    const client = new ZetarisClient({ baseUrl: "http://localhost:3000", username: "a", password: "b" });
+    const client = new ZetarisClient({
+      baseUrl: "http://localhost:3000",
+      username: "a",
+      password: "b",
+    });
     // #when
     const session = await client.login();
     // #then
@@ -35,9 +39,20 @@ describe("ZetarisClient", () => {
     // #given
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValueOnce({ ok: false, status: 401, statusText: "Unauthorized", text: async () => "nope" }),
+      vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 401,
+          statusText: "Unauthorized",
+          text: async () => "nope",
+        }),
     );
-    const client = new ZetarisClient({ baseUrl: "http://localhost:3000", username: "a", password: "wrong" });
+    const client = new ZetarisClient({
+      baseUrl: "http://localhost:3000",
+      username: "a",
+      password: "wrong",
+    });
     // #when / #then
     await expect(client.login()).rejects.toThrow(/Zetaris login failed/);
   });
@@ -49,14 +64,21 @@ describe("ZetarisClient", () => {
       .mockResolvedValueOnce({
         ok: true,
         text: async () =>
-          JSON.stringify({ accessToken: "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhZG1pbiJ9.abc123signature", orgId: 7 }),
+          JSON.stringify({
+            accessToken: "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJhZG1pbiJ9.abc123signature",
+            orgId: 7,
+          }),
       })
       .mockResolvedValueOnce({
         ok: true,
         text: async () => JSON.stringify({ rows: [{ seven: "7" }] }),
       });
     vi.stubGlobal("fetch", fakeFetch);
-    const client = new ZetarisClient({ baseUrl: "http://localhost:3000", username: "a", password: "b" });
+    const client = new ZetarisClient({
+      baseUrl: "http://localhost:3000",
+      username: "a",
+      password: "b",
+    });
     // #when
     const result = await client.query("select 7 as seven", 5);
     // #then

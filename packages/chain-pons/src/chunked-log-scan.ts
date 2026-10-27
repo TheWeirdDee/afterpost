@@ -37,7 +37,8 @@ export async function scanLogsInChunks(
       consecutiveSuccesses += 1;
 
       if (consecutiveSuccesses >= 3 && chunkSize < MAX_GET_LOGS_BLOCK_SPAN) {
-        chunkSize = chunkSize * 2n > MAX_GET_LOGS_BLOCK_SPAN ? MAX_GET_LOGS_BLOCK_SPAN : chunkSize * 2n;
+        chunkSize =
+          chunkSize * 2n > MAX_GET_LOGS_BLOCK_SPAN ? MAX_GET_LOGS_BLOCK_SPAN : chunkSize * 2n;
         consecutiveSuccesses = 0;
       }
     } catch (error) {
@@ -45,7 +46,8 @@ export async function scanLogsInChunks(
       if (chunkSize <= MIN_GET_LOGS_BLOCK_SPAN) {
         throw error;
       }
-      chunkSize = chunkSize / 2n > MIN_GET_LOGS_BLOCK_SPAN ? chunkSize / 2n : MIN_GET_LOGS_BLOCK_SPAN;
+      chunkSize =
+        chunkSize / 2n > MIN_GET_LOGS_BLOCK_SPAN ? chunkSize / 2n : MIN_GET_LOGS_BLOCK_SPAN;
       // retry same cursor with the smaller chunk size
     }
   }

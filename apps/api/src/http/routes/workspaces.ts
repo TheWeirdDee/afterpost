@@ -3,7 +3,13 @@ import type { FastifyInstance } from "fastify";
 import { prisma } from "../../lib/prisma.js";
 import { ApiError, NOT_FOUND, VALIDATION_FAILED } from "../errors.js";
 
-function toDto(workspace: { id: string; slug: string; displayName: string; timezone: string; createdAt: Date }): WorkspaceDto {
+function toDto(workspace: {
+  id: string;
+  slug: string;
+  displayName: string;
+  timezone: string;
+  createdAt: Date;
+}): WorkspaceDto {
   return {
     id: workspace.id,
     slug: workspace.slug,
@@ -31,12 +37,18 @@ export async function workspaceRoutes(app: FastifyInstance): Promise<void> {
 
     const ownerIdResult = (request.body as { ownerId?: unknown }).ownerId;
     if (typeof ownerIdResult !== "string" || ownerIdResult.length === 0) {
-      throw VALIDATION_FAILED({ issues: [{ path: ["ownerId"], message: "ownerId is required (temporary pre-auth field)" }] });
+      throw VALIDATION_FAILED({
+        issues: [{ path: ["ownerId"], message: "ownerId is required (temporary pre-auth field)" }],
+      });
     }
 
     const existing = await prisma.workspace.findUnique({ where: { slug: bodyResult.data.slug } });
     if (existing) {
-      throw new ApiError("SLUG_TAKEN", `Workspace slug '${bodyResult.data.slug}' is already in use`, 409);
+      throw new ApiError(
+        "SLUG_TAKEN",
+        `Workspace slug '${bodyResult.data.slug}' is already in use`,
+        409,
+      );
     }
 
     const workspace = await prisma.$transaction(async (tx) => {

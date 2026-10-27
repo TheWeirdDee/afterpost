@@ -72,7 +72,10 @@ export class ZetarisClient {
       throw new Error(`Zetaris query failed: ${response.status} ${response.statusText} — ${text}`);
     }
 
-    const body = JSON.parse(text) as { rows?: Array<Record<string, string>> } & Record<string, unknown>;
+    const body = JSON.parse(text) as { rows?: Array<Record<string, string>> } & Record<
+      string,
+      unknown
+    >;
     const rows = body.rows ?? [];
 
     return {

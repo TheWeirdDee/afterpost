@@ -18,7 +18,9 @@ describe("API server (live Postgres + Redis)", () => {
   });
 
   afterAll(async () => {
-    await prisma.workspaceMember.deleteMany({ where: { workspaceId: { in: createdWorkspaceIds } } });
+    await prisma.workspaceMember.deleteMany({
+      where: { workspaceId: { in: createdWorkspaceIds } },
+    });
     await prisma.workspace.deleteMany({ where: { id: { in: createdWorkspaceIds } } });
     await prisma.user.deleteMany({ where: { id: { in: createdUserIds } } });
     await app.close();

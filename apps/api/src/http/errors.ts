@@ -20,8 +20,9 @@ export const AUTH_REQUIRED = (message = "Authentication required"): ApiError =>
 export const ROLE_FORBIDDEN = (message = "Insufficient role for this action"): ApiError =>
   new ApiError("ROLE_FORBIDDEN", message, 403);
 
-export const WORKSPACE_MISMATCH = (message = "Resource does not belong to this workspace"): ApiError =>
-  new ApiError("WORKSPACE_MISMATCH", message, 403);
+export const WORKSPACE_MISMATCH = (
+  message = "Resource does not belong to this workspace",
+): ApiError => new ApiError("WORKSPACE_MISMATCH", message, 403);
 
 export const NOT_FOUND = (resource: string): ApiError =>
   new ApiError("NOT_FOUND", `${resource} not found`, 404);

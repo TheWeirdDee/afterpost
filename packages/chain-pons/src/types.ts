@@ -68,7 +68,11 @@ export interface ChainAdapter {
   validateToken(address: `0x${string}`): Promise<TokenIdentity>;
   discoverPools(token: `0x${string}`): Promise<PoolIdentity[]>;
   scanSwaps(pool: `0x${string}`, fromBlock: bigint, toBlock: bigint): Promise<SwapObservation[]>;
-  scanTransfers(token: `0x${string}`, fromBlock: bigint, toBlock: bigint): Promise<TransferObservation[]>;
+  scanTransfers(
+    token: `0x${string}`,
+    fromBlock: bigint,
+    toBlock: bigint,
+  ): Promise<TransferObservation[]>;
   resolveTransaction(txHash: `0x${string}`): Promise<RawTransactionEvidence>;
   getCanonicalBlock(blockNumber: bigint): Promise<BlockIdentity>;
   getLatestSafeBlock(): Promise<bigint>;
