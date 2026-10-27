@@ -64,26 +64,67 @@ No credentials required (public RPC).
   real token metadata fetch, real pool discovery + independent verification,
   real transaction resolution).
 
-## Zetaris — IN PROGRESS, not yet verified
+## Zetaris — VERIFIED LIVE, including the sponsor-removal test
 
 The local Zetaris Docker Compose platform (downloaded via the official
-`zetaris-platform.zip` from the Zetaris Cloud Gateway dashboard) is being
-provisioned: registry login to `zetarishackathon.azurecr.io` succeeded,
-`./preflight.sh` passed all required checks, and `docker compose pull` is
-running. The pull is large and slow in this environment (observed roughly
-10MB/min aggregate across three layers) and may not finish before the
-submission deadline. Once it does: `docker compose up -d`, `./verify.sh`,
-sign in at `http://localhost:3000` with the bundled default admin account
-(see `~/zetaris-platform/.env`, changed after first sign-in per that file's
-own instructions), register at least two independently-sourced tables (e.g.
-campaign/evidence metadata and indexed chain events) as separate logical
-sources, and run one real cross-source query before claiming sponsor
-integration. **No query has run yet — do not treat this as complete.**
+`zetaris-platform.zip` from the Zetaris Cloud Gateway dashboard) is fully
+up and verified:
 
-**Needed to unblock further:** nothing further blocks the local platform
-coming up; it only needs the pull to finish. Registering real Afterpost
-sources requires the API/DB layer (not yet built) or a manual registration
-against the Prisma schema's tables directly as a stopgap.
+- Registry login to `zetarishackathon.azurecr.io` succeeded.
+- `./preflight.sh` passed all required checks.
+- The image pull was genuinely slow in this environment at first — root
+  cause diagnosed, not assumed: raw internet speed tested at 5.4MB/s on
+  this machine, but the pull itself was crawling at ~0.25MB/s aggregate.
+  The actual cause was two unrelated containers on this machine stuck in
+  crash-restart loops (`nginx` failing DNS lookups every ~30s, a
+  Canton/Splice blockchain node restarting every ~2s), saturating the
+  shared Docker Desktop VM. Stopping them (with the user's explicit
+  confirmation) immediately raised pull throughput roughly 10x.
+- `docker compose up -d` brought up all 5 services; `./verify.sh` passed
+  8/9 checks (postgres/driver/api/ui healthy, login succeeded, a basic
+  query executed through the full `ui -> api -> driver -> spark` stack);
+  the 9th (`bootstrap` loading sample data) finished shortly after.
+
+**`packages/zetaris-client` built and verified against the real platform,
+not the generic public docs.** The actual working REST contract was read
+directly out of the bundled `zetaris-platform/verify.sh` (the vendor's own
+smoke test) rather than guessed from the public kbase pages: `POST
+/api/auth/login`, then `POST /api/proxy/query/sql/start` with
+`Authorization`/`X-Org-ID`/`X-Request-ID` headers. One further discovery
+not documented anywhere public: the real response body uses `records` (not
+`rows`), plus genuine pagination fields (`pageNumber`, `pageLimit`,
+`totalCount`, `totalPages`, `queryToken`) — found by inspecting the raw
+response, since the generic docs don't specify the exact shape. The client
+was fixed to match reality before being treated as working.
+
+**The PRD §11.1 "sponsor-removal test" passed for real.** A single query
+joined two independently registered, physically distinct sources — the
+bootstrapped `NY_TAXI` database (CSV, from `s3a://zetaris-public-dataset`)
+and `TPCDS_DB` (Parquet, same bucket, different schema) — not a disguised
+local join:
+
+```sql
+SELECT c.customer_type, d.d_year, COUNT(*) as n
+FROM NY_TAXI.customers c
+JOIN TPCDS_DB.date_dim d ON d.d_year = 2021
+GROUP BY c.customer_type, d.d_year
+LIMIT 10
+```
+
+This executed through real Spark in ~41 seconds and returned real
+aggregated counts (e.g. `{"customer_type":"Premium","d_year":"2021","n":"12202680"}`)
+— not an instant/mocked response. Test:
+`packages/zetaris-client/src/zetaris-client.integration.test.ts`, 2/2
+passing when `ZETARIS_ADMIN_PASSWORD` is set (skipped, not faked, when it
+isn't — per PRD §18.2).
+
+**What's still not done:** registering genuine Afterpost-specific sources
+(campaign/evidence/chain-event tables from the Prisma schema) as Zetaris
+logical sources and querying *those* — the proof above uses the platform's
+own bootstrapped sample data to prove the federated-query mechanism works,
+not yet Afterpost's actual business data. That requires either the API
+layer writing through a Zetaris-registered view, or manual source
+registration against the already-migrated Postgres schema.
 
 ## NVIDIA NIM / Nemotron, routed through Meterless Nightshift — UNVERIFIED, blocked
 

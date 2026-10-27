@@ -91,12 +91,23 @@ is asserted that hasn't actually run.
   tests, and a full Postgres migration + API integration test suite
   against real service containers — not just locally, in the cloud.
 
+- **Zetaris, including the sponsor-removal test.** The local platform
+  (Docker Compose) is up, verified, and queried for real through
+  `packages/zetaris-client`. A single query joined two independently
+  registered, physically distinct sources (a CSV dataset and a Parquet
+  dataset, different S3 locations) through real Spark in ~41 seconds —
+  not a disguised local join. The REST contract (`records`, not `rows`;
+  real pagination fields) was discovered from the platform's own response,
+  not assumed from generic docs. Full evidence, including a real
+  diagnosed-and-fixed performance issue, in `docs/INTEGRATIONS.md`.
+
 **In progress / not yet verified:**
 
-- Zetaris federated query layer — the local Docker Compose platform is
-  being provisioned (image pull in progress as of this submission; it is a
-  large, slow pull and may not finish before the deadline). No live query
-  has run yet. Tracked honestly in `docs/INTEGRATIONS.md`.
+- Registering genuine Afterpost-specific sources (the campaign/evidence/
+  chain-event tables) into Zetaris and querying those, rather than the
+  platform's own bootstrapped sample data — the proof above establishes
+  the federated-query mechanism works; wiring in Afterpost's actual
+  business data is the remaining step.
 - Meterless Nightshift as the primary LLM provider, routing NVIDIA Nemotron
   inference — the connector is implemented
   (`packages/model-generator/src/nightshift-generator.ts`, an injected
@@ -179,10 +190,15 @@ from — Zetaris, Nightshift, object storage, OAuth, etc).
 
 ## Sponsor technology
 
-- **Zetaris** — intended as the federated query layer joining campaign
+- **Zetaris** — the federated query layer intended to join campaign
   commitments, promotional evidence, and indexed chain events as genuinely
-  separate registered sources. The local platform (Docker Compose) is being
-  provisioned; no live query has run yet. See `docs/INTEGRATIONS.md`.
+  separate registered sources. Verified live: the local platform is up,
+  `packages/zetaris-client` is built against its real (reverse-engineered,
+  not publicly documented) REST contract, and a genuine federated query
+  joining two independently registered, physically distinct sources
+  executed through real Spark — the PRD's own "sponsor-removal test." Full
+  evidence in `docs/INTEGRATIONS.md`. Wiring in Afterpost's own business
+  data (vs. the platform's bootstrapped samples) is the remaining step.
 - **Meterless** — two Agent Engines implemented as real, tested services:
   - **World Model** at `packages/meterless-world-model` — idempotent
     append-only ingest, provenance-backed entity state, relationships.

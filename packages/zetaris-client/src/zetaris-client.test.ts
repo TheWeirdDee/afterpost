@@ -39,14 +39,12 @@ describe("ZetarisClient", () => {
     // #given
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockResolvedValueOnce({
-          ok: false,
-          status: 401,
-          statusText: "Unauthorized",
-          text: async () => "nope",
-        }),
+      vi.fn().mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        statusText: "Unauthorized",
+        text: async () => "nope",
+      }),
     );
     const client = new ZetarisClient({
       baseUrl: "http://localhost:3000",
@@ -71,7 +69,15 @@ describe("ZetarisClient", () => {
       })
       .mockResolvedValueOnce({
         ok: true,
-        text: async () => JSON.stringify({ rows: [{ seven: "7" }] }),
+        text: async () =>
+          JSON.stringify({
+            records: [{ seven: "7" }],
+            pageNumber: 1,
+            pageLimit: 5,
+            totalCount: 1,
+            totalPages: 1,
+            queryToken: "tok_abc",
+          }),
       });
     vi.stubGlobal("fetch", fakeFetch);
     const client = new ZetarisClient({
@@ -84,6 +90,8 @@ describe("ZetarisClient", () => {
     // #then
     expect(result.rows).toEqual([{ seven: "7" }]);
     expect(result.rowCount).toBe(1);
+    expect(result.queryToken).toBe("tok_abc");
+    expect(result.totalCount).toBe(1);
     const queryCall = fakeFetch.mock.calls[1]!;
     expect(queryCall[0]).toBe("http://localhost:3000/api/proxy/query/sql/start");
     const headers = (queryCall[1] as RequestInit).headers as Record<string, string>;
