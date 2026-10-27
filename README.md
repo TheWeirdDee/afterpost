@@ -33,15 +33,51 @@ is asserted that hasn't actually run.
 - A complete relational schema (`prisma/schema.prisma`) for the full product
   surface: workspaces, campaigns, evidence provenance, chain observations,
   tracking/attribution, investigation runs, findings, and reports.
+- **Two Meterless Agent Engines, implemented as real services with real
+  tests — not just read from the reference docs:**
+  - **World Model** (`packages/meterless-world-model`) — append-only,
+    content-hash-idempotent event ingestion, entity state rebuilt from the
+    log (never mutated in place), relationship edges
+    (`supports`/`contradicts`/`belongs_to`/...), full provenance. 6/6 tests
+    passing, including a literal "ingest the same observation twice, assert
+    exactly one event" idempotency test.
+  - **H-MEM** (`packages/meterless-hmem`) — tiered memory
+    (short-term/working/long-term), hybrid retrieval ranking (topical
+    overlap gates layer/recency/run-scope boosts — a memory with zero
+    relevance to the query cannot surface just because it's recent), an
+    append-only JSONL trust ledger, and agent feedback loops that move
+    confidence up/down and tag corrections for review. 10/10 tests passing.
+  - A real, live-chain-data run of both together lives at
+    `apps/worker/src/demo-investigation.ts` — fetches the real reference
+    pons token/pool from the live RPC, ingests it into World Model
+    (demonstrating idempotency live, not just in a unit test), mines an
+    H-MEM memory, then simulates a *second* investigation retrieving that
+    memory from a fresh store instance over the same file. Run it yourself
+    with `pnpm --filter @afterpost/worker demo:investigation`. Its JSONL
+    output (events, memories, trust ledger, and the full step trace) is
+    committed under `logs/` as evidence, per the Meterless engines' own
+    "if it isn't in logs/ as JSONL, a judge can't see it happened" rule.
+  - **Markovian** (long-task bounded-context reasoning) was deliberately
+    **not** implemented — the engines' own guidance is to keep it optional
+    unless a long-running investigation genuinely needs it, and nothing in
+    the current build runs long enough to justify it.
 
 **In progress / not yet verified:**
 
-- Zetaris federated query layer — platform is being provisioned; no live
-  query has run yet. Tracked in `docs/INTEGRATIONS.md`.
-- Meterless Nightshift as the LLM routing layer for NVIDIA Nemotron — not
-  yet wired; runtime endpoint/token not yet available.
-- A Meterless Engine (H-MEM) for investigation history — not yet
-  implemented or conformance-tested.
+- Zetaris federated query layer — the local Docker Compose platform is
+  being provisioned (image pull in progress as of this submission; it is a
+  large, slow pull and may not finish before the deadline). No live query
+  has run yet. Tracked honestly in `docs/INTEGRATIONS.md`.
+- Meterless Nightshift as the primary LLM provider, routing NVIDIA Nemotron
+  inference — the connector is implemented
+  (`packages/model-generator/src/nightshift-generator.ts`, an injected
+  `Generator` matching the Meterless engines' own provider-agnostic seam)
+  but its runtime endpoint has not been confirmed, so every model call in
+  this build currently runs through the documented no-model fallback
+  (`packages/model-generator/src/no-model-generator.ts`), which the
+  Meterless engine docs themselves specify as the sample-mode degradation
+  path — every such result is tagged `isFallback: true` and never reported
+  as a real inference call.
 - The Fastify API, Auth.js, the agent state machine, and the Next.js UI are
   not yet built.
 
@@ -59,13 +95,19 @@ of collapsing them into a misleading single score.
 ## Repository layout
 
 ```text
-packages/domain/      deterministic metric calculators and policy engine
-packages/chain-pons/  read-only ChainAdapter for Robinhood Chain / pons
-packages/contracts/   (planned) shared Zod DTOs between API and web
-packages/ui/          (planned) shared UI components
-prisma/schema.prisma  full relational data model
-docs/                 integration status, architecture notes
-infra/                environment variable reference, deployment config
+packages/domain/               deterministic metric calculators and policy engine
+packages/chain-pons/           read-only ChainAdapter for Robinhood Chain / pons
+packages/meterless-world-model/  Meterless World Model Agent Engine (real, tested)
+packages/meterless-hmem/       Meterless H-MEM Agent Engine (real, tested)
+packages/model-generator/      provider-agnostic generator seam + Nightshift connector
+packages/shared-store/         append-only JSONL store + stable content-hash IDs
+packages/contracts/            (planned) shared Zod DTOs between API and web
+packages/ui/                   (planned) shared UI components
+apps/worker/                   real end-to-end demo tying chain data + both engines together
+prisma/schema.prisma           full relational data model
+docs/                          integration status, architecture notes
+infra/                         environment variable reference, deployment config
+logs/                          committed JSONL evidence from the real demo run
 ```
 
 ## Running the verified parts from a clean checkout
@@ -79,6 +121,13 @@ pnpm --filter @afterpost/domain test:unit
 # Live chain adapter — hits the real public Robinhood Chain RPC, no credentials needed
 pnpm --filter @afterpost/chain-pons test:unit
 pnpm --filter @afterpost/chain-pons test:integration
+
+# Meterless World Model and H-MEM engines — no network, no credentials
+pnpm --filter @afterpost/meterless-world-model test:unit
+pnpm --filter @afterpost/meterless-hmem test:unit
+
+# Real end-to-end demo: live chain data -> World Model -> H-MEM -> JSONL trace
+pnpm --filter @afterpost/worker demo:investigation
 ```
 
 Copy `.env.example` to `.env` and fill in credentials to work on the parts
@@ -88,13 +137,24 @@ that need them (see comments in that file for where each value comes from).
 
 - **Zetaris** — intended as the federated query layer joining campaign
   commitments, promotional evidence, and indexed chain events as genuinely
-  separate registered sources. See `docs/INTEGRATIONS.md` for current status.
-- **Meterless (Nightshift / H-MEM)** — Nightshift is the intended LLM
-  routing layer for NVIDIA Nemotron inference; H-MEM is the intended
-  persistent-memory engine for cross-campaign investigation history. Both
-  pending credentials/implementation — status tracked honestly in
-  `docs/INTEGRATIONS.md`, not claimed until a real call/conformance run
-  succeeds.
+  separate registered sources. The local platform (Docker Compose) is being
+  provisioned; no live query has run yet. See `docs/INTEGRATIONS.md`.
+- **Meterless** — two Agent Engines implemented as real, tested services:
+  - **World Model** at `packages/meterless-world-model` — idempotent
+    append-only ingest, provenance-backed entity state, relationships.
+  - **H-MEM** at `packages/meterless-hmem` — tiered memory, hybrid
+    retrieval, trust-ledger audit trail, feedback-adjusted confidence.
+  - Both run live together in `apps/worker/src/demo-investigation.ts`
+    against real Robinhood Chain data; its JSONL output is committed under
+    `logs/`.
+  - **Nightshift** (primary LLM provider, routing NVIDIA Nemotron) — the
+    connector is built (`packages/model-generator`) as the provider-agnostic
+    "injected generator" the Meterless docs specify, but its runtime
+    endpoint is unverified, so this build currently runs on the documented
+    no-model fallback. Nothing here claims a Nightshift/Nemotron call that
+    didn't happen.
+  - **Markovian** — deliberately not implemented; not needed at this scale,
+    per the engines' own guidance.
 - **Robinhood Chain / pons** — live and verified; see above.
 
 ## License

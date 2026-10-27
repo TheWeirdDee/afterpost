@@ -52,37 +52,93 @@ No credentials required (public RPC).
   real token metadata fetch, real pool discovery + independent verification,
   real transaction resolution).
 
-## Zetaris — UNVERIFIED, blocked
+## Zetaris — IN PROGRESS, not yet verified
 
-No tenant credentials (`ZETARIS_API_BASE_URL`, `ZETARIS_API_KEY`,
-`ZETARIS_ORG_ID`) are available in this environment. No registration, query,
-or connectivity test has been attempted. Per PRD §11.1 this blocks any claim
-of sponsor integration; `ZETARIS_UNAVAILABLE` is the correct status until a
-real tenant query succeeds.
+The local Zetaris Docker Compose platform (downloaded via the official
+`zetaris-platform.zip` from the Zetaris Cloud Gateway dashboard) is being
+provisioned: registry login to `zetarishackathon.azurecr.io` succeeded,
+`./preflight.sh` passed all required checks, and `docker compose pull` is
+running. The pull is large and slow in this environment (observed roughly
+10MB/min aggregate across three layers) and may not finish before the
+submission deadline. Once it does: `docker compose up -d`, `./verify.sh`,
+sign in at `http://localhost:3000` with the bundled default admin account
+(see `~/zetaris-platform/.env`, changed after first sign-in per that file's
+own instructions), register at least two independently-sourced tables (e.g.
+campaign/evidence metadata and indexed chain events) as separate logical
+sources, and run one real cross-source query before claiming sponsor
+integration. **No query has run yet — do not treat this as complete.**
 
-**Needed to unblock:** Zetaris tenant base URL, API key/bearer token, org ID,
-and the tenant's actual REST route paths (the public kbase docs describe
-`DBQuery/OpenSqlQuery`, `PageSqlQuery`, `CloseSqlQuery` conceptually but not
-the deployed tenant's exact paths).
+**Needed to unblock further:** nothing further blocks the local platform
+coming up; it only needs the pull to finish. Registering real Afterpost
+sources requires the API/DB layer (not yet built) or a manual registration
+against the Prisma schema's tables directly as a stopgap.
 
-## NVIDIA NIM / Nemotron — UNVERIFIED, blocked
+## NVIDIA NIM / Nemotron, routed through Meterless Nightshift — UNVERIFIED, blocked
 
-No `NVIDIA_API_KEY` / `NVIDIA_NIM_BASE_URL` available. No inference call has
-been attempted. Per PRD §11.3, the Nemotron sponsor claim is only earned by a
-live, validated inference request — not by wiring the client code.
+Per updated instructions, Nemotron must be routed through Meterless
+Nightshift as the primary provider, not called directly. The connector is
+implemented (`packages/model-generator/src/nightshift-generator.ts`) as an
+OpenAI-chat-completions-compatible client — this shape is an *assumption*
+matching the Meterless engines' own documented "injected generator" pattern
+(`meterless-readme.md` §2), not a confirmed Nightshift API contract. No
+`NIGHTSHIFT_BASE_URL`/`NIGHTSHIFT_API_KEY` is available, and the user has
+stated the Nightshift web chat interface is not the same thing as its
+runtime API and that the endpoint is not yet verified on their machine.
+Every model call in this build currently runs through the documented
+no-model fallback (`packages/model-generator/src/no-model-generator.ts`),
+and every such result is tagged `isFallback: true`.
 
-**Needed to unblock:** NVIDIA NIM API key and confirmation of the exact
-deployed model identifier for `nvidia/nemotron-3.5-super-vl-120b-a12b` (or
-documented alternative) and its quota.
+**Needed to unblock:** a real Nightshift runtime base URL + API key, and
+confirmation of its actual request/response shape (chat-completions-style is
+assumed, not confirmed).
 
-## Meterless (H-MEM / World Model) — NOT YET ATTEMPTED
+## Meterless World Model and H-MEM — IMPLEMENTED AND TESTED
 
-No upstream commit has been pinned yet, and no conformance harness has been
-run. This requires cloning `https://github.com/Meterless/Meterless`,
-`https://github.com/Meterless/H-MEM`, and `https://github.com/Meterless/World-Model`,
-picking a pinned commit, and running their reference conformance suite
-against our adapter — none of which has happened yet in this session. Not
-blocked by credentials, blocked by implementation time.
+Six official Meterless hackathon documents were provided
+(`internal/meterless/*.md`: the agent-engines index, the H-MEM and World
+Model agent-engine specs, the Markovian spec, the readme, and the sponsor
+overview) and read in full before implementation. Per those docs' own
+framing, these are "reference architectures, not a library you `pip
+install`" — implemented here as real services, not copied documentation:
+
+- **World Model** (`packages/meterless-world-model`): `WorldModelService`
+  with content-hash-derived idempotent event IDs (`stableId`), append-only
+  JSONL persistence, entity-state rebuild from the non-superseded event log,
+  and relationship edges. 6/6 tests passing, including an idempotency test
+  that ingests the literal same observation twice and asserts exactly one
+  stored event.
+- **H-MEM** (`packages/meterless-hmem`): `MemoryStoreService` (tiered
+  short/working/long-term, append-only JSONL, feedback-driven confidence
+  adjustment), `MemoryRetrievalService` (hybrid ranking — topical
+  keyword/tag overlap gates layer/recency/run-scope boosts, so nothing
+  surfaces on recency alone), and `TrustLedgerService` (append-only JSONL
+  audit of every mutation). 10/10 tests passing.
+- **Markovian**: deliberately not implemented. The engines' own readme says
+  to use "the smallest set that helps" and that Markovian is for bounding
+  token cost on long tasks — nothing in this build runs long enough to need
+  it, and the updated instructions explicitly say to keep it optional.
+- **Real end-to-end proof**, not just unit tests in isolation:
+  `apps/worker/src/demo-investigation.ts` runs live against the real
+  Robinhood Chain RPC (fetches the real reference token/pool), ingests the
+  observation into World Model (demonstrating idempotency against a live
+  run, not just a mock), mines an H-MEM memory via the no-model fallback
+  (correctly tagged `isFallback: true`, since Nightshift is unverified),
+  and simulates a second investigation retrieving that memory from a fresh
+  store instance over the same file — genuine cross-"process" persistence.
+  Run with `pnpm --filter @afterpost/worker demo:investigation`. Output
+  (`world-model-events.jsonl`, `hmem-memories.jsonl`,
+  `hmem-trust-ledger.jsonl`, `investigation-trace-<runId>.jsonl`) is
+  committed under `logs/` as evidence.
+- Not implemented: H-MEM dreaming/sleep, World Model enrichment jobs,
+  conflict auto-resolution — the docs themselves say to add these "only
+  once the basics work," and the basics (store + retrieval + idempotent
+  ingest) are what's demonstrated here.
+- No upstream Meterless commit has been pinned and no official conformance
+  harness (from `github.com/Meterless/H-MEM` / `World-Model`) has been run
+  against this implementation — these are original implementations of the
+  documented contracts, not a pinned reference build. If a conformance
+  suite is required rather than a contract-following implementation, that
+  is still outstanding.
 
 ## Object storage (S3/R2/MinIO), email provider, Google OAuth — UNVERIFIED, blocked
 
@@ -95,8 +151,9 @@ tool environment is not linked to your Vercel account/project — `vercel
 link`/`vercel deploy` must be run interactively by you, or you provide a
 project link + token.
 
-## GitHub remote — BLOCKED
+## GitHub remote — LIVE
 
 The `github` MCP server in this environment failed to connect
-(`Authorization header is badly formatted`). No remote repository has been
-created. The local repo is initialized (`git init`) with no commits yet.
+(`Authorization header is badly formatted`), but the `gh` CLI was
+independently authenticated and used instead. Public repository:
+https://github.com/winsznx/afterpost.
