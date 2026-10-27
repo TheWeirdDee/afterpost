@@ -1,8 +1,8 @@
-import { randomUUID } from "node:crypto";
 import { REFERENCE_PONS_TOKEN, ROBINHOOD_CHAIN_ID } from "@afterpost/chain-pons";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildServer } from "../../server.js";
 import { prisma } from "../../lib/prisma.js";
+import { signupWithWorkspace } from "../../test-support/auth-helpers.js";
 
 /**
  * Real integration test: live Robinhood Chain RPC token verification +
@@ -22,6 +22,7 @@ describe("POST /v1/projects (live RPC + live Postgres)", () => {
   afterAll(async () => {
     await prisma.project.deleteMany({ where: { id: { in: createdProjectIds } } });
     await prisma.token.deleteMany({ where: { workspaceId: { in: createdWorkspaceIds } } });
+    await prisma.session.deleteMany({ where: { userId: { in: createdUserIds } } });
     await prisma.workspaceMember.deleteMany({
       where: { workspaceId: { in: createdWorkspaceIds } },
     });
@@ -30,28 +31,22 @@ describe("POST /v1/projects (live RPC + live Postgres)", () => {
     await app.close();
   });
 
-  async function makeWorkspace(): Promise<string> {
-    const user = await prisma.user.create({ data: { email: `${randomUUID()}@afterpost.test` } });
-    createdUserIds.push(user.id);
-    const workspace = await prisma.workspace.create({
-      data: {
-        slug: `ws-${randomUUID().slice(0, 8)}`,
-        displayName: "Project Test",
-        ownerId: user.id,
-      },
-    });
-    createdWorkspaceIds.push(workspace.id);
-    return workspace.id;
+  async function makeWorkspace(): Promise<{ workspaceId: string; token: string }> {
+    const account = await signupWithWorkspace(app, "Project Test");
+    createdUserIds.push(account.userId);
+    createdWorkspaceIds.push(account.workspaceId);
+    return { workspaceId: account.workspaceId, token: account.token };
   }
 
   it("creates a project backed by a genuinely onchain-verified token", async () => {
     // #given
-    const workspaceId = await makeWorkspace();
+    const { workspaceId, token } = await makeWorkspace();
 
     // #when — this actually calls the live RPC's validateToken
     const response = await app.inject({
       method: "POST",
       url: "/v1/projects",
+      headers: { authorization: `Bearer ${token}` },
       payload: {
         workspaceId,
         name: "Reference pons project",
@@ -71,7 +66,7 @@ describe("POST /v1/projects (live RPC + live Postgres)", () => {
 
   it("returns the existing project instead of creating a duplicate for the same token", async () => {
     // #given
-    const workspaceId = await makeWorkspace();
+    const { workspaceId, token } = await makeWorkspace();
     const payload = {
       workspaceId,
       name: "First creation",
@@ -79,13 +74,19 @@ describe("POST /v1/projects (live RPC + live Postgres)", () => {
       tokenAddress: REFERENCE_PONS_TOKEN,
       platform: "pons",
     };
-    const first = await app.inject({ method: "POST", url: "/v1/projects", payload });
+    const first = await app.inject({
+      method: "POST",
+      url: "/v1/projects",
+      headers: { authorization: `Bearer ${token}` },
+      payload,
+    });
     createdProjectIds.push(first.json().id);
 
     // #when
     const second = await app.inject({
       method: "POST",
       url: "/v1/projects",
+      headers: { authorization: `Bearer ${token}` },
       payload: { ...payload, name: "Attempted duplicate" },
     });
 
@@ -97,12 +98,13 @@ describe("POST /v1/projects (live RPC + live Postgres)", () => {
 
   it("rejects an unsupported chain before attempting any RPC call", async () => {
     // #given
-    const workspaceId = await makeWorkspace();
+    const { workspaceId, token } = await makeWorkspace();
 
     // #when
     const response = await app.inject({
       method: "POST",
       url: "/v1/projects",
+      headers: { authorization: `Bearer ${token}` },
       payload: {
         workspaceId,
         name: "Wrong chain",
@@ -119,12 +121,13 @@ describe("POST /v1/projects (live RPC + live Postgres)", () => {
 
   it("returns TOKEN_NOT_VERIFIED for an address with no deployed contract, not a fabricated project", async () => {
     // #given — a syntactically valid but almost certainly unused address
-    const workspaceId = await makeWorkspace();
+    const { workspaceId, token } = await makeWorkspace();
 
     // #when
     const response = await app.inject({
       method: "POST",
       url: "/v1/projects",
+      headers: { authorization: `Bearer ${token}` },
       payload: {
         workspaceId,
         name: "Nonexistent token",
@@ -138,4 +141,29 @@ describe("POST /v1/projects (live RPC + live Postgres)", () => {
     expect(response.statusCode).toBe(422);
     expect(response.json().code).toBe("TOKEN_NOT_VERIFIED");
   }, 30_000);
+
+  it("rejects project creation from a user who isn't a member of the workspace", async () => {
+    // #given
+    const { workspaceId } = await makeWorkspace();
+    const outsider = await signupWithWorkspace(app, "Outsider's own workspace");
+    createdUserIds.push(outsider.userId);
+    createdWorkspaceIds.push(outsider.workspaceId);
+
+    // #when
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/projects",
+      headers: { authorization: `Bearer ${outsider.token}` },
+      payload: {
+        workspaceId, // someone else's workspace
+        name: "Should be forbidden",
+        chainId: ROBINHOOD_CHAIN_ID,
+        tokenAddress: REFERENCE_PONS_TOKEN,
+        platform: "pons",
+      },
+    });
+
+    // #then
+    expect(response.statusCode).toBe(403);
+  });
 });

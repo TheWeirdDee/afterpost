@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import Fastify from "fastify";
+import { authRoutes } from "./http/routes/auth.js";
 import { campaignRoutes } from "./http/routes/campaigns.js";
 import { evidenceRoutes } from "./http/routes/evidence.js";
 import { healthRoutes } from "./http/routes/health.js";
@@ -37,6 +38,7 @@ export function buildServer() {
   });
 
   app.register(healthRoutes);
+  app.register(authRoutes);
   app.register(workspaceRoutes);
   app.register(projectRoutes);
   app.register(partnerRoutes);

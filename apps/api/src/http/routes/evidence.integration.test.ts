@@ -1,8 +1,8 @@
-import { randomUUID } from "node:crypto";
 import { REFERENCE_PONS_TOKEN, ROBINHOOD_CHAIN_ID } from "@afterpost/chain-pons";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildServer } from "../../server.js";
 import { prisma } from "../../lib/prisma.js";
+import { signupWithWorkspace } from "../../test-support/auth-helpers.js";
 
 describe("Evidence routes (live Postgres)", () => {
   const app = buildServer();
@@ -12,25 +12,23 @@ describe("Evidence routes (live Postgres)", () => {
     campaignIds: [] as string[],
   };
   let workspaceId: string;
+  let token: string;
   let campaignId: string;
 
   beforeAll(async () => {
     await app.ready();
 
-    const user = await prisma.user.create({ data: { email: `${randomUUID()}@afterpost.test` } });
-    cleanup.userIds.push(user.id);
-
-    const ws = await app.inject({
-      method: "POST",
-      url: "/v1/workspaces",
-      payload: { name: "Evidence Test", slug: `ws-${randomUUID().slice(0, 8)}`, ownerId: user.id },
-    });
-    workspaceId = ws.json().id;
-    cleanup.workspaceIds.push(workspaceId);
+    const account = await signupWithWorkspace(app, "Evidence Test");
+    cleanup.userIds.push(account.userId);
+    cleanup.workspaceIds.push(account.workspaceId);
+    workspaceId = account.workspaceId;
+    token = account.token;
+    const authHeaders = { authorization: `Bearer ${token}` };
 
     const project = await app.inject({
       method: "POST",
       url: "/v1/projects",
+      headers: authHeaders,
       payload: {
         workspaceId,
         name: "Evidence Test Project",
@@ -43,12 +41,14 @@ describe("Evidence routes (live Postgres)", () => {
     const partner = await app.inject({
       method: "POST",
       url: "/v1/partners",
+      headers: authHeaders,
       payload: { workspaceId, displayName: "Evidence Test Partner" },
     });
 
     const campaign = await app.inject({
       method: "POST",
       url: "/v1/campaigns",
+      headers: authHeaders,
       payload: {
         workspaceId,
         projectId: project.json().id,
@@ -71,6 +71,7 @@ describe("Evidence routes (live Postgres)", () => {
     await prisma.partner.deleteMany({ where: { workspaceId: { in: cleanup.workspaceIds } } });
     await prisma.token.deleteMany({ where: { workspaceId: { in: cleanup.workspaceIds } } });
     await prisma.project.deleteMany({ where: { workspaceId: { in: cleanup.workspaceIds } } });
+    await prisma.session.deleteMany({ where: { userId: { in: cleanup.userIds } } });
     await prisma.workspaceMember.deleteMany({
       where: { workspaceId: { in: cleanup.workspaceIds } },
     });
@@ -84,7 +85,8 @@ describe("Evidence routes (live Postgres)", () => {
     const response = await app.inject({
       method: "POST",
       url: `/v1/campaigns/${campaignId}/evidence/urls`,
-      payload: { workspaceId, kind: "POST_URL", sourceRef: "https://x.com/example/status/123" },
+      headers: { authorization: `Bearer ${token}` },
+      payload: { kind: "POST_URL", sourceRef: "https://x.com/example/status/123" },
     });
 
     // #then — PRD §9.2: accepting a URL does not establish authenticity
@@ -99,13 +101,15 @@ describe("Evidence routes (live Postgres)", () => {
     await app.inject({
       method: "POST",
       url: `/v1/campaigns/${campaignId}/evidence/urls`,
-      payload: { workspaceId, kind: "POST_URL", sourceRef: "https://x.com/example/status/456" },
+      headers: { authorization: `Bearer ${token}` },
+      payload: { kind: "POST_URL", sourceRef: "https://x.com/example/status/456" },
     });
 
     // #when
     const response = await app.inject({
       method: "GET",
       url: `/v1/campaigns/${campaignId}/evidence`,
+      headers: { authorization: `Bearer ${token}` },
     });
 
     // #then
@@ -113,29 +117,21 @@ describe("Evidence routes (live Postgres)", () => {
     expect(response.json().items.length).toBeGreaterThanOrEqual(2);
   });
 
-  it("rejects attaching evidence to a campaign in a different workspace", async () => {
-    // #given
-    const otherUser = await prisma.user.create({
-      data: { email: `${randomUUID()}@afterpost.test` },
-    });
-    cleanup.userIds.push(otherUser.id);
-    const otherWs = await prisma.workspace.create({
-      data: { slug: `ws-${randomUUID().slice(0, 8)}`, displayName: "Other", ownerId: otherUser.id },
-    });
-    cleanup.workspaceIds.push(otherWs.id);
+  it("rejects attaching evidence from a user who isn't a member of the campaign's workspace", async () => {
+    // #given — a genuinely separate account with its own, unrelated workspace
+    const outsider = await signupWithWorkspace(app, "Outsider's own workspace");
+    cleanup.userIds.push(outsider.userId);
+    cleanup.workspaceIds.push(outsider.workspaceId);
 
-    // #when — attempting cross-tenant write with a mismatched workspaceId
+    // #when — attempting a cross-tenant write against the first workspace's campaign
     const response = await app.inject({
       method: "POST",
       url: `/v1/campaigns/${campaignId}/evidence/urls`,
-      payload: {
-        workspaceId: otherWs.id,
-        kind: "POST_URL",
-        sourceRef: "https://x.com/example/status/789",
-      },
+      headers: { authorization: `Bearer ${outsider.token}` },
+      payload: { kind: "POST_URL", sourceRef: "https://x.com/example/status/789" },
     });
 
     // #then
-    expect(response.statusCode).toBe(404);
+    expect(response.statusCode).toBe(403);
   });
 });

@@ -1,5 +1,6 @@
 import { CreatePartnerRequestSchema, type PartnerDto } from "@afterpost/contracts";
 import type { FastifyInstance } from "fastify";
+import { requireAuth, requireWorkspaceRole } from "../middleware/auth.js";
 import { prisma } from "../../lib/prisma.js";
 import { NOT_FOUND, VALIDATION_FAILED } from "../errors.js";
 
@@ -26,7 +27,7 @@ function toDto(partner: {
  * the one hard requirement FR-C01 states explicitly.
  */
 export async function partnerRoutes(app: FastifyInstance): Promise<void> {
-  app.post("/v1/partners", async (request, reply) => {
+  app.post("/v1/partners", { preHandler: requireAuth }, async (request, reply) => {
     const bodyResult = CreatePartnerRequestSchema.safeParse(request.body);
     if (!bodyResult.success) {
       throw VALIDATION_FAILED({ issues: bodyResult.error.issues });
@@ -35,11 +36,10 @@ export async function partnerRoutes(app: FastifyInstance): Promise<void> {
     const workspaceId = (request.body as { workspaceId?: unknown }).workspaceId;
     if (typeof workspaceId !== "string" || workspaceId.length === 0) {
       throw VALIDATION_FAILED({
-        issues: [
-          { path: ["workspaceId"], message: "workspaceId is required (temporary pre-auth field)" },
-        ],
+        issues: [{ path: ["workspaceId"], message: "workspaceId is required" }],
       });
     }
+    await requireWorkspaceRole(request, workspaceId, "ANALYST");
 
     const partner = await prisma.partner.create({
       data: {
@@ -54,10 +54,11 @@ export async function partnerRoutes(app: FastifyInstance): Promise<void> {
     return toDto(partner);
   });
 
-  app.get("/v1/partners/:id", async (request) => {
+  app.get("/v1/partners/:id", { preHandler: requireAuth }, async (request) => {
     const { id } = request.params as { id: string };
     const partner = await prisma.partner.findUnique({ where: { id } });
     if (!partner) throw NOT_FOUND("Partner");
+    await requireWorkspaceRole(request, partner.workspaceId, "VIEWER");
     return toDto(partner);
   });
 }

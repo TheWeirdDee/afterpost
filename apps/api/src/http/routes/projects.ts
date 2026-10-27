@@ -1,6 +1,7 @@
 import { CreateProjectRequestSchema, type ProjectDto } from "@afterpost/contracts";
 import { PonsRobinhoodAdapter, ROBINHOOD_CHAIN_ID } from "@afterpost/chain-pons";
 import type { FastifyInstance } from "fastify";
+import { requireAuth, requireWorkspaceRole } from "../middleware/auth.js";
 import { prisma } from "../../lib/prisma.js";
 import { ApiError, NOT_FOUND, VALIDATION_FAILED } from "../errors.js";
 
@@ -51,7 +52,7 @@ function toDto(project: {
  * instead of creating a second one, per FR-B01's acceptance criterion.
  */
 export async function projectRoutes(app: FastifyInstance): Promise<void> {
-  app.post("/v1/projects", async (request, reply) => {
+  app.post("/v1/projects", { preHandler: requireAuth }, async (request, reply) => {
     const bodyResult = CreateProjectRequestSchema.safeParse(request.body);
     if (!bodyResult.success) {
       throw VALIDATION_FAILED({ issues: bodyResult.error.issues });
@@ -60,11 +61,10 @@ export async function projectRoutes(app: FastifyInstance): Promise<void> {
     const workspaceId = (request.body as { workspaceId?: unknown }).workspaceId;
     if (typeof workspaceId !== "string" || workspaceId.length === 0) {
       throw VALIDATION_FAILED({
-        issues: [
-          { path: ["workspaceId"], message: "workspaceId is required (temporary pre-auth field)" },
-        ],
+        issues: [{ path: ["workspaceId"], message: "workspaceId is required" }],
       });
     }
+    await requireWorkspaceRole(request, workspaceId, "ANALYST");
 
     const { name, chainId, tokenAddress, platform } = bodyResult.data;
 
@@ -140,13 +140,14 @@ export async function projectRoutes(app: FastifyInstance): Promise<void> {
     return toDto(project);
   });
 
-  app.get("/v1/projects/:id", async (request) => {
+  app.get("/v1/projects/:id", { preHandler: requireAuth }, async (request) => {
     const { id } = request.params as { id: string };
     const project = await prisma.project.findUnique({
       where: { id },
       include: { primaryToken: true },
     });
     if (!project) throw NOT_FOUND("Project");
+    await requireWorkspaceRole(request, project.workspaceId, "VIEWER");
     return toDto(project);
   });
 }

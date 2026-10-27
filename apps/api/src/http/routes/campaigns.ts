@@ -1,5 +1,6 @@
 import { CreateCampaignRequestSchema, type CampaignDetailDto } from "@afterpost/contracts";
 import type { FastifyInstance } from "fastify";
+import { requireAuth, requireWorkspaceRole } from "../middleware/auth.js";
 import { prisma } from "../../lib/prisma.js";
 import { NOT_FOUND, VALIDATION_FAILED } from "../errors.js";
 
@@ -64,7 +65,7 @@ const CAMPAIGN_INCLUDE = { partner: true, project: true, deliverables: true } as
  * rejects a JS number) — never implicitly confirmed as paid or verified.
  */
 export async function campaignRoutes(app: FastifyInstance): Promise<void> {
-  app.post("/v1/campaigns", async (request, reply) => {
+  app.post("/v1/campaigns", { preHandler: requireAuth }, async (request, reply) => {
     const bodyResult = CreateCampaignRequestSchema.safeParse(request.body);
     if (!bodyResult.success) {
       throw VALIDATION_FAILED({ issues: bodyResult.error.issues });
@@ -73,11 +74,10 @@ export async function campaignRoutes(app: FastifyInstance): Promise<void> {
     const workspaceId = (request.body as { workspaceId?: unknown }).workspaceId;
     if (typeof workspaceId !== "string" || workspaceId.length === 0) {
       throw VALIDATION_FAILED({
-        issues: [
-          { path: ["workspaceId"], message: "workspaceId is required (temporary pre-auth field)" },
-        ],
+        issues: [{ path: ["workspaceId"], message: "workspaceId is required" }],
       });
     }
+    await requireWorkspaceRole(request, workspaceId, "ANALYST");
 
     const data = bodyResult.data;
 
@@ -118,10 +118,11 @@ export async function campaignRoutes(app: FastifyInstance): Promise<void> {
     return toDetailDto(campaign);
   });
 
-  app.get("/v1/campaigns/:id", async (request) => {
+  app.get("/v1/campaigns/:id", { preHandler: requireAuth }, async (request) => {
     const { id } = request.params as { id: string };
     const campaign = await prisma.campaign.findUnique({ where: { id }, include: CAMPAIGN_INCLUDE });
     if (!campaign) throw NOT_FOUND("Campaign");
+    await requireWorkspaceRole(request, campaign.workspaceId, "VIEWER");
     return toDetailDto(campaign);
   });
 }
