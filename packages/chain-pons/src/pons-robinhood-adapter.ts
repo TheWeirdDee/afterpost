@@ -131,7 +131,8 @@ export class PonsRobinhoodAdapter implements ChainAdapter {
         ]);
 
         const tokenIsInPool =
-          token0.toLowerCase() === token.toLowerCase() || token1.toLowerCase() === token.toLowerCase();
+          token0.toLowerCase() === token.toLowerCase() ||
+          token1.toLowerCase() === token.toLowerCase();
         if (!tokenIsInPool) continue; // candidate did not actually verify; reject, do not guess
 
         pools.push({
@@ -152,7 +153,11 @@ export class PonsRobinhoodAdapter implements ChainAdapter {
     return pools;
   }
 
-  async scanSwaps(pool: `0x${string}`, fromBlock: bigint, toBlock: bigint): Promise<SwapObservation[]> {
+  async scanSwaps(
+    pool: `0x${string}`,
+    fromBlock: bigint,
+    toBlock: bigint,
+  ): Promise<SwapObservation[]> {
     const [token0, token1] = await Promise.all([
       this.client.readContract({ address: pool, abi: UNISWAP_V3_POOL_ABI, functionName: "token0" }),
       this.client.readContract({ address: pool, abi: UNISWAP_V3_POOL_ABI, functionName: "token1" }),
@@ -173,7 +178,12 @@ export class PonsRobinhoodAdapter implements ChainAdapter {
 
     for (const log of logs) {
       if (log.topics[0]?.toLowerCase() !== UNISWAP_V3_SWAP_TOPIC0.toLowerCase()) continue;
-      if (log.blockNumber === null || log.logIndex === null || !log.blockHash || !log.transactionHash) {
+      if (
+        log.blockNumber === null ||
+        log.logIndex === null ||
+        !log.blockHash ||
+        !log.transactionHash
+      ) {
         continue;
       }
 
@@ -226,7 +236,12 @@ export class PonsRobinhoodAdapter implements ChainAdapter {
     const observations: TransferObservation[] = [];
 
     for (const log of logs) {
-      if (log.blockNumber === null || log.logIndex === null || !log.blockHash || !log.transactionHash) {
+      if (
+        log.blockNumber === null ||
+        log.logIndex === null ||
+        !log.blockHash ||
+        !log.transactionHash
+      ) {
         continue;
       }
 

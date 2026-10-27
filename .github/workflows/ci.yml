@@ -1,0 +1,153 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  typecheck-and-unit-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm exec prisma generate --schema prisma/schema.prisma
+
+      - name: Typecheck every package
+        run: |
+          for pkg in domain chain-pons shared-store model-generator meterless-hmem meterless-world-model contracts zetaris-client; do
+            echo "::group::typecheck $pkg"
+            (cd packages/$pkg && pnpm exec tsc --noEmit)
+            echo "::endgroup::"
+          done
+          echo "::group::typecheck apps/worker"
+          (cd apps/worker && pnpm exec tsc --noEmit)
+          echo "::endgroup::"
+          echo "::group::typecheck apps/api"
+          (cd apps/api && pnpm exec tsc --noEmit)
+          echo "::endgroup::"
+
+      - name: Unit tests (no network, no credentials required)
+        run: |
+          for pkg in domain chain-pons shared-store model-generator meterless-hmem meterless-world-model contracts zetaris-client; do
+            echo "::group::test $pkg"
+            (cd packages/$pkg && pnpm exec vitest run)
+            echo "::endgroup::"
+          done
+
+  live-chain-integration-test:
+    runs-on: ubuntu-latest
+    # Hits the real public Robinhood Chain RPC. No credentials required,
+    # but it is a live network call, so it's kept as a separate job from
+    # the credential-free unit tests above and allowed to fail without
+    # blocking the rest of CI (public RPC availability is outside our
+    # control).
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Live Robinhood Chain RPC integration tests
+        run: cd packages/chain-pons && pnpm exec vitest run --config vitest.integration.config.ts
+
+  postgres-integration-test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: afterpost
+          POSTGRES_PASSWORD: afterpost
+          POSTGRES_DB: afterpost
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U afterpost -d afterpost"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6380:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://afterpost:afterpost@localhost:5433/afterpost
+      REDIS_URL: redis://localhost:6380
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Apply migrations to a fresh database
+        run: pnpm exec prisma migrate deploy --schema prisma/schema.prisma
+      - name: Generate Prisma client
+        run: pnpm exec prisma generate --schema prisma/schema.prisma
+      - name: API integration tests against real Postgres/Redis
+        run: cd apps/api && pnpm exec vitest run --config vitest.integration.config.ts
+
+  chain-sync-integration-test:
+    runs-on: ubuntu-latest
+    # Needs both the live public RPC and a live DB; continue-on-error for
+    # the same reason as live-chain-integration-test above (public RPC
+    # uptime isn't ours to control).
+    continue-on-error: true
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: afterpost
+          POSTGRES_PASSWORD: afterpost
+          POSTGRES_DB: afterpost
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U afterpost -d afterpost"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://afterpost:afterpost@localhost:5433/afterpost
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec prisma migrate deploy --schema prisma/schema.prisma
+      - run: pnpm exec prisma generate --schema prisma/schema.prisma
+      - name: Real chain indexer sync against live RPC + live Postgres
+        run: cd apps/worker && pnpm exec vitest run --config vitest.integration.config.ts

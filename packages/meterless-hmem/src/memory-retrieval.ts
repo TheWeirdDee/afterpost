@@ -1,4 +1,4 @@
-import type { MemoryRecord, RetrievalResult, RetrievalTrace } from "./types.js";
+import type { MemoryRecord, RetrievalTrace } from "./types.js";
 
 const LAYER_WEIGHT: Record<MemoryRecord["layer"], number> = {
   long_term: 1.0,

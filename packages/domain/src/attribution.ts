@@ -59,7 +59,10 @@ export function evaluateQualifyingConversion(
   if (association.walletAddress.toLowerCase() !== acquisition.walletAddress.toLowerCase()) {
     reasons.push("wallet_mismatch");
   }
-  if (association.revokedAt && association.revokedAt.getTime() <= acquisition.txTimestamp.getTime()) {
+  if (
+    association.revokedAt &&
+    association.revokedAt.getTime() <= acquisition.txTimestamp.getTime()
+  ) {
     reasons.push("association_revoked_before_conversion");
   }
   if (association.signedAt.getTime() > acquisition.txTimestamp.getTime()) {
@@ -84,7 +87,10 @@ export function evaluateQualifyingConversion(
     reasons.push("buyer_recipient_unresolved");
   }
 
-  if (reasons.includes("system_wallet_excluded") || reasons.includes("non_purchase_transfer_excluded")) {
+  if (
+    reasons.includes("system_wallet_excluded") ||
+    reasons.includes("non_purchase_transfer_excluded")
+  ) {
     return { resolution: "rejected", reasons };
   }
 

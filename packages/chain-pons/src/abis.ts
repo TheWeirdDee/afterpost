@@ -116,7 +116,9 @@ export function decodeTokenLaunchedTopics(topics: readonly `0x${string}`[]): {
  * (WETH), word[1] = pool address. Returns null if the data is too short to
  * contain a second word.
  */
-export function extractPoolCandidateFromTokenLaunchedData(dataHex: `0x${string}`): `0x${string}` | null {
+export function extractPoolCandidateFromTokenLaunchedData(
+  dataHex: `0x${string}`,
+): `0x${string}` | null {
   const hex = dataHex.slice(2);
   const wordLength = 64;
   if (hex.length < wordLength * 2) return null;

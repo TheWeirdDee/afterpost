@@ -29,7 +29,8 @@ export interface WorldModelEvent {
 
 export type NewWorldModelEvent = Omit<WorldModelEvent, "id" | "createdAt">;
 
-export type RelationType = "supports" | "contradicts" | "belongs_to" | "supersedes" | "observed_during";
+export type RelationType =
+  "supports" | "contradicts" | "belongs_to" | "supersedes" | "observed_during";
 
 export interface RelationPayload {
   relation: RelationType;

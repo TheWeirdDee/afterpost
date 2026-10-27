@@ -12,6 +12,7 @@ coverage/
 *.tsbuildinfo
 /prisma/*.db
 .vercel/
+.claude/
 
 # Internal product spec — not published to the public hackathon repo.
 # A sanitized copy may be added to docs/ deliberately later.

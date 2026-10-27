@@ -41,7 +41,9 @@ describe("retrieveMemories", () => {
       tags: ["other"],
     });
     // #when
-    const trace = retrieveMemories([relevant, irrelevant], { query: "campaign cmp_1 thread delivery" });
+    const trace = retrieveMemories([relevant, irrelevant], {
+      query: "campaign cmp_1 thread delivery",
+    });
     // #then
     expect(trace.results[0]?.memory.id).toBe("mem_relevant");
   });
@@ -51,7 +53,10 @@ describe("retrieveMemories", () => {
     const sameRun = makeMemory({ id: "mem_same_run", content: "campaign note", runId: "run_42" });
     const otherRun = makeMemory({ id: "mem_other_run", content: "campaign note", runId: "run_99" });
     // #when
-    const trace = retrieveMemories([sameRun, otherRun], { query: "campaign note", runId: "run_42" });
+    const trace = retrieveMemories([sameRun, otherRun], {
+      query: "campaign note",
+      runId: "run_42",
+    });
     // #then
     const sameRunResult = trace.results.find((r) => r.memory.id === "mem_same_run");
     const otherRunResult = trace.results.find((r) => r.memory.id === "mem_other_run");
@@ -60,8 +65,16 @@ describe("retrieveMemories", () => {
 
   it("weights long-term memories above short-term ones for an otherwise equal match", () => {
     // #given
-    const longTerm = makeMemory({ id: "mem_long", content: "shared content phrase", layer: "long_term" });
-    const shortTerm = makeMemory({ id: "mem_short", content: "shared content phrase", layer: "short_term" });
+    const longTerm = makeMemory({
+      id: "mem_long",
+      content: "shared content phrase",
+      layer: "long_term",
+    });
+    const shortTerm = makeMemory({
+      id: "mem_short",
+      content: "shared content phrase",
+      layer: "short_term",
+    });
     // #when
     const trace = retrieveMemories([longTerm, shortTerm], { query: "shared content phrase" });
     // #then
