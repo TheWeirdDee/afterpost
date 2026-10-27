@@ -90,13 +90,22 @@ importers:
       '@afterpost/shared-store':
         specifier: workspace:*
         version: link:../../packages/shared-store
+      '@prisma/client':
+        specifier: 5.22.0
+        version: 5.22.0(prisma@5.22.0)
     devDependencies:
       '@types/node':
         specifier: ^22.10.2
         version: 22.20.5
+      tsx:
+        specifier: ^4.23.15
+        version: 4.23.15
       typescript:
         specifier: ^5.7.2
         version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.5)
 
   packages/chain-pons:
     dependencies:

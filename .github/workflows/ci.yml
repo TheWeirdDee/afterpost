@@ -111,3 +111,40 @@ jobs:
         run: pnpm exec prisma generate --schema prisma/schema.prisma
       - name: API integration tests against real Postgres/Redis
         run: cd apps/api && pnpm exec vitest run --config vitest.integration.config.ts
+
+  chain-sync-integration-test:
+    runs-on: ubuntu-latest
+    # Needs both the live public RPC and a live DB; continue-on-error for
+    # the same reason as live-chain-integration-test above (public RPC
+    # uptime isn't ours to control).
+    continue-on-error: true
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: afterpost
+          POSTGRES_PASSWORD: afterpost
+          POSTGRES_DB: afterpost
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U afterpost -d afterpost"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://afterpost:afterpost@localhost:5433/afterpost
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec prisma migrate deploy --schema prisma/schema.prisma
+      - run: pnpm exec prisma generate --schema prisma/schema.prisma
+      - name: Real chain indexer sync against live RPC + live Postgres
+        run: cd apps/worker && pnpm exec vitest run --config vitest.integration.config.ts

@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "demo:investigation": "tsx src/demo-investigation.ts"
+    "demo:investigation": "tsx src/demo-investigation.ts",
+    "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
     "@afterpost/chain-pons": "workspace:*",
@@ -13,10 +14,13 @@
     "@afterpost/meterless-hmem": "workspace:*",
     "@afterpost/meterless-world-model": "workspace:*",
     "@afterpost/model-generator": "workspace:*",
-    "@afterpost/shared-store": "workspace:*"
+    "@afterpost/shared-store": "workspace:*",
+    "@prisma/client": "5.22.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
-    "typescript": "^5.7.2"
+    "tsx": "^4.23.15",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
   }
 }
