@@ -5,6 +5,7 @@ import { evidenceRoutes } from "./http/routes/evidence.js";
 import { healthRoutes } from "./http/routes/health.js";
 import { partnerRoutes } from "./http/routes/partners.js";
 import { projectRoutes } from "./http/routes/projects.js";
+import { reportRoutes } from "./http/routes/reports.js";
 import { workspaceRoutes } from "./http/routes/workspaces.js";
 import { ApiError } from "./http/errors.js";
 import { prisma } from "./lib/prisma.js";
@@ -41,6 +42,7 @@ export function buildServer() {
   app.register(partnerRoutes);
   app.register(campaignRoutes);
   app.register(evidenceRoutes);
+  app.register(reportRoutes);
 
   app.addHook("onClose", async () => {
     await prisma.$disconnect();
