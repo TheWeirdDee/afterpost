@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import Fastify from "fastify";
 import { campaignRoutes } from "./http/routes/campaigns.js";
+import { evidenceRoutes } from "./http/routes/evidence.js";
 import { healthRoutes } from "./http/routes/health.js";
 import { partnerRoutes } from "./http/routes/partners.js";
 import { projectRoutes } from "./http/routes/projects.js";
@@ -39,6 +40,7 @@ export function buildServer() {
   app.register(projectRoutes);
   app.register(partnerRoutes);
   app.register(campaignRoutes);
+  app.register(evidenceRoutes);
 
   app.addHook("onClose", async () => {
     await prisma.$disconnect();
