@@ -66,7 +66,12 @@ export class MemoryStoreService {
     return current.find((m) => m.id === id) ?? null;
   }
 
-  private async writeVersion(updated: MemoryRecord, action: "update" | "feedback" | "promote", actor: string, details: Record<string, unknown>): Promise<MemoryRecord> {
+  private async writeVersion(
+    updated: MemoryRecord,
+    action: "update" | "feedback" | "promote",
+    actor: string,
+    details: Record<string, unknown>,
+  ): Promise<MemoryRecord> {
     await this.store.append(updated);
     await this.ledger.record({
       memoryId: updated.id,
@@ -81,7 +86,11 @@ export class MemoryStoreService {
   async promote(id: string, newLayer: MemoryRecord["layer"], actor: string): Promise<MemoryRecord> {
     const current = await this.getById(id);
     if (!current) throw new Error(`Memory ${id} not found`);
-    const updated: MemoryRecord = { ...current, layer: newLayer, lastAccessed: new Date().toISOString() };
+    const updated: MemoryRecord = {
+      ...current,
+      layer: newLayer,
+      lastAccessed: new Date().toISOString(),
+    };
     return this.writeVersion(updated, "promote", actor, { from: current.layer, to: newLayer });
   }
 
@@ -95,9 +104,10 @@ export class MemoryStoreService {
 
     const delta = verdict === "helpful" ? 0.05 : verdict === "not_helpful" ? -0.05 : -0.2;
     const confidence = Math.max(0, Math.min(1, current.confidence + delta));
-    const tags = verdict === "wrong" && !current.tags.includes("review")
-      ? [...current.tags, "review"]
-      : current.tags;
+    const tags =
+      verdict === "wrong" && !current.tags.includes("review")
+        ? [...current.tags, "review"]
+        : current.tags;
 
     const updated: MemoryRecord = {
       ...current,
@@ -106,7 +116,11 @@ export class MemoryStoreService {
       accessCount: verdict === "helpful" ? current.accessCount + 1 : current.accessCount,
       lastAccessed: new Date().toISOString(),
     };
-    return this.writeVersion(updated, "feedback", actor, { verdict, previousConfidence: current.confidence, newConfidence: confidence });
+    return this.writeVersion(updated, "feedback", actor, {
+      verdict,
+      previousConfidence: current.confidence,
+      newConfidence: confidence,
+    });
   }
 
   async touch(id: string): Promise<MemoryRecord> {

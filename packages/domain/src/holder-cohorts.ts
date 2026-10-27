@@ -58,10 +58,7 @@ export function computeHolderBalanceRetention(
   const entryTotal = cohort.reduce((sum, c) => sum + c.entryBalanceRaw, 0n);
   if (entryTotal === 0n) return null;
 
-  const endTotal = cohort.reduce(
-    (sum, c) => sum + (c.balanceAtHorizonRaw ?? 0n),
-    0n,
-  );
+  const endTotal = cohort.reduce((sum, c) => sum + (c.balanceAtHorizonRaw ?? 0n), 0n);
 
   // Convert via Number only for the final ratio; raw sums stay bigint throughout.
   return Number(endTotal) / Number(entryTotal);

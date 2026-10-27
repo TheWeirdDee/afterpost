@@ -13,7 +13,8 @@ describe("validateFindingLanguage", () => {
 
   it("accepts precise observed-only language with no causal claim", () => {
     // #given
-    const text = "The token saw 50 observed pool swaps after this post, between 18:00 and 20:00 UTC.";
+    const text =
+      "The token saw 50 observed pool swaps after this post, between 18:00 and 20:00 UTC.";
     // #when
     const result = validateFindingLanguage(text, "observed_only");
     // #then

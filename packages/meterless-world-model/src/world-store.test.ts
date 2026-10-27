@@ -130,6 +130,10 @@ describe("WorldModelService", () => {
     const relations = await service.getRelations("obligation:ob_1");
     // #then
     expect(relations).toHaveLength(1);
-    expect(relations[0]).toMatchObject({ relation: "supports", from: "evidence:ev_1", to: "obligation:ob_1" });
+    expect(relations[0]).toMatchObject({
+      relation: "supports",
+      from: "evidence:ev_1",
+      to: "obligation:ob_1",
+    });
   });
 });

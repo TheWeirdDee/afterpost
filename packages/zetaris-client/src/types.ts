@@ -15,4 +15,10 @@ export interface ZetarisQueryResult {
   rowCount: number;
   requestId: string;
   durationMs: number;
+  /** Real response fields confirmed live 2026-10-27 (see docs/INTEGRATIONS.md). */
+  pageNumber: number;
+  pageLimit: number;
+  totalCount: number;
+  totalPages: number;
+  queryToken: string | null;
 }
