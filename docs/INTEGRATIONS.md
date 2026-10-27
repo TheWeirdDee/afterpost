@@ -7,6 +7,18 @@ treat anything marked `UNVERIFIED` as working.
 
 Last updated: 2026-10-27 (session start).
 
+## PostgreSQL schema — VERIFIED
+
+`prisma migrate dev` applied the full schema (`prisma/schema.prisma`, 40+
+tables) from an empty database to a real local Postgres 16 instance
+(`infra/docker-compose.yml`, port 5433) with zero errors — satisfies PRD
+§13.7's "must be deterministic and runnable from an empty database."
+Migration: `prisma/migrations/20261027220931_init/migration.sql`.
+
+Followed by a real write/read/delete smoke test: created a `User`, created
+a `Workspace` with a real foreign key to that user, counted rows, deleted
+both. Not a mock — actual SQL against the actual container.
+
 ## Robinhood Chain RPC — VERIFIED
 
 No credentials required (public RPC).

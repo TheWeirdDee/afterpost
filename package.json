@@ -21,6 +21,7 @@
     "prisma:deploy": "prisma migrate deploy --schema prisma/schema.prisma"
   },
   "devDependencies": {
+    "@prisma/client": "5.22.0",
     "@typescript-eslint/eslint-plugin": "^8.18.0",
     "@typescript-eslint/parser": "^8.18.0",
     "eslint": "^9.17.0",
