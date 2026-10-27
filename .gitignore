@@ -1,0 +1,18 @@
+node_modules/
+.pnpm-store/
+dist/
+.next/
+.turbo/
+coverage/
+*.log
+.env
+.env.*
+!.env.example
+.DS_Store
+*.tsbuildinfo
+/prisma/*.db
+.vercel/
+
+# Internal product spec — not published to the public hackathon repo.
+# A sanitized copy may be added to docs/ deliberately later.
+internal/

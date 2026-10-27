@@ -1,0 +1,1157 @@
+// Afterpost relational contract — implements PRD §13.
+// Money and token-amount fields use Decimal/String, never float. Timestamps are UTC (timestamptz).
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// §13.1 Identity, projects, people
+// ---------------------------------------------------------------------------
+
+model User {
+  id              String    @id @default(uuid())
+  email           String    @unique
+  name            String?
+  avatarUrl       String?   @map("avatar_url")
+  emailVerifiedAt DateTime? @map("email_verified_at") @db.Timestamptz
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  authAccounts      AuthAccount[]
+  workspaceMembers  WorkspaceMember[]
+  ownedWorkspaces   Workspace[]       @relation("WorkspaceOwner")
+  auditEventsActed  AuditEvent[]      @relation("AuditActor")
+  notifications     Notification[]
+  evidenceUploaded  Evidence[]        @relation("EvidenceUploader")
+
+  @@map("users")
+}
+
+model AuthAccount {
+  id                String  @id @default(uuid())
+  userId            String  @map("user_id")
+  provider          String
+  providerAccountId String  @map("provider_account_id")
+  tokenMetadataJson Json?   @map("token_metadata_json")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("auth_accounts")
+}
+
+model Workspace {
+  id                  String   @id @default(uuid())
+  slug                String   @unique
+  displayName         String   @map("display_name")
+  timezone            String   @default("UTC")
+  retentionPolicyDays Int      @default(365) @map("retention_policy_days")
+  ownerId             String   @map("owner_id")
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  owner   User              @relation("WorkspaceOwner", fields: [ownerId], references: [id])
+  members WorkspaceMember[]
+  invites WorkspaceInvite[]
+
+  projects                Project[]
+  tokens                  Token[]
+  partners                Partner[]
+  campaigns               Campaign[]
+  evidence                Evidence[]
+  investigationRuns       InvestigationRun[]
+  reports                 Report[]
+  trackingLinks           TrackingLink[]
+  wallertAssociations     WalletCampaignAssociation[]
+  qualifyingConversions   QualifyingConversion[]
+  worldModelEvents        WorldModelEvent[]
+  memoryRecords           MemoryRecord[]
+  auditEvents             AuditEvent[]
+  notifications           Notification[]
+  integrationConnections  IntegrationConnection[]
+  sourceHealth            SourceHealth[]
+  wallletLabels           WalletLabel[]
+
+  @@map("workspaces")
+}
+
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  ANALYST
+  VIEWER
+  PROMOTER_PORTAL
+}
+
+enum MembershipStatus {
+  ACTIVE
+  REVOKED
+}
+
+model WorkspaceMember {
+  workspaceId String            @map("workspace_id")
+  userId      String            @map("user_id")
+  role        WorkspaceRole
+  status      MembershipStatus  @default(ACTIVE)
+  joinedAt    DateTime          @default(now()) @map("joined_at") @db.Timestamptz
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([workspaceId, userId])
+  @@map("workspace_members")
+}
+
+model WorkspaceInvite {
+  id              String        @id @default(uuid())
+  workspaceId     String        @map("workspace_id")
+  email           String
+  role            WorkspaceRole
+  tokenHash       String        @unique @map("token_hash")
+  expiresAt       DateTime      @map("expires_at") @db.Timestamptz
+  redeemedAt      DateTime?     @map("redeemed_at") @db.Timestamptz
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("workspace_invites")
+}
+
+enum ProjectStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+model Project {
+  id              String         @id @default(uuid())
+  workspaceId     String         @map("workspace_id")
+  name            String
+  description     String?
+  status          ProjectStatus  @default(ACTIVE)
+  primaryTokenId  String?        @unique @map("primary_token_id")
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace    Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  primaryToken Token?     @relation("ProjectPrimaryToken", fields: [primaryTokenId], references: [id])
+  tokens       Token[]    @relation("TokenProject")
+  campaigns    Campaign[]
+
+  @@index([workspaceId, status])
+  @@map("projects")
+}
+
+model Token {
+  id                   String    @id @default(uuid())
+  workspaceId          String    @map("workspace_id")
+  projectId            String?   @map("project_id")
+  chainId              Int       @map("chain_id")
+  contractAddress      String    @map("contract_address") // lowercase, canonical
+  checksumAddress      String    @map("checksum_address")
+  symbol               String?
+  name                 String?
+  decimals             Int?
+  totalSupplyRaw       String?   @map("total_supply_raw") // uint256 as string
+  platform             String?   // e.g. "pons"
+  factoryAddress       String?   @map("factory_address")
+  platformVersion      String?   @map("platform_version")
+  launchBlock          String?   @map("launch_block") // bigint as string
+  metadataVerifiedAt   DateTime? @map("metadata_verified_at") @db.Timestamptz
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace            Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project              Project?  @relation("TokenProject", fields: [projectId], references: [id])
+  primaryForProject    Project?  @relation("ProjectPrimaryToken")
+  pools                Pool[]
+  transferObservations TransferObservation[]
+  balanceSnapshots     BalanceSnapshot[]
+  campaigns            Campaign[]
+
+  @@unique([workspaceId, chainId, contractAddress])
+  @@map("tokens")
+}
+
+model Pool {
+  id              String    @id @default(uuid())
+  tokenId         String    @map("token_id")
+  chainId         Int       @map("chain_id")
+  address         String    // lowercase, canonical
+  token0          String
+  token1          String
+  feeTier         Int?      @map("fee_tier")
+  discoveredBlock String?   @map("discovered_block")
+  verifiedAt      DateTime? @map("verified_at") @db.Timestamptz
+
+  token            Token              @relation(fields: [tokenId], references: [id], onDelete: Cascade)
+  swapObservations SwapObservation[]
+
+  @@unique([chainId, address])
+  @@map("pools")
+}
+
+enum PartnerStatus {
+  CANDIDATE
+  TRIAL
+  ACTIVE
+  PAUSED
+  DO_NOT_RENEW
+  ARCHIVED
+}
+
+model Partner {
+  id             String        @id @default(uuid())
+  workspaceId    String        @map("workspace_id")
+  displayName    String        @map("display_name")
+  handle         String?
+  profileUrl     String?       @map("profile_url")
+  aliasesJson    Json          @default("[]") @map("aliases_json")
+  status         PartnerStatus @default(CANDIDATE)
+  notesEncrypted String?       @map("notes_encrypted")
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contacts  PartnerContact[]
+  campaigns Campaign[]
+  trackingLinks TrackingLink[]
+
+  @@index([workspaceId, handle])
+  @@map("partners")
+}
+
+enum ContactVisibility {
+  PRIVATE
+  WORKSPACE
+}
+
+model PartnerContact {
+  id            String            @id @default(uuid())
+  partnerId     String            @map("partner_id")
+  type          String
+  valueEncrypted String           @map("value_encrypted")
+  visibility    ContactVisibility @default(PRIVATE)
+
+  partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+
+  @@index([partnerId])
+  @@map("partner_contacts")
+}
+
+// ---------------------------------------------------------------------------
+// §13.2 Campaigns and external proof
+// ---------------------------------------------------------------------------
+
+enum CampaignGoal {
+  DELIVERY_AND_AWARENESS
+  ACQUISITION
+  RETENTION
+  OTHER
+}
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  IN_REVIEW
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  AGREED
+  INVOICE_RECEIVED
+  PAID_USER_REPORTED
+  DISPUTED
+  CANCELLED
+}
+
+model Campaign {
+  id                   String         @id @default(uuid())
+  workspaceId          String         @map("workspace_id")
+  projectId            String         @map("project_id")
+  partnerId             String         @map("partner_id")
+  tokenId               String?        @map("token_id")
+  title                String
+  goal                 CampaignGoal   @default(OTHER)
+  startAt              DateTime       @map("start_at") @db.Timestamptz
+  endAt                DateTime       @map("end_at") @db.Timestamptz
+  reviewAt             DateTime?      @map("review_at") @db.Timestamptz
+  reportingTimezone    String         @default("UTC") @map("reporting_timezone")
+  costAmount           Decimal?       @map("cost_amount") @db.Decimal(18, 2)
+  costCurrency         String?        @map("cost_currency")
+  paymentStatus        PaymentStatus  @default(AGREED) @map("payment_status")
+  status               CampaignStatus @default(DRAFT)
+  termsVersion         Int            @default(0) @map("terms_version")
+  currentPolicyVersion String         @default("v1") @map("current_policy_version")
+  createdAt            DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project   @relation(fields: [projectId], references: [id])
+  partner   Partner   @relation(fields: [partnerId], references: [id])
+  token     Token?    @relation(fields: [tokenId], references: [id])
+
+  termsVersions      CampaignTermsVersion[]
+  deliverables       Deliverable[]
+  evidence           Evidence[]
+  paymentObservations PaymentObservation[]
+  investigationRuns  InvestigationRun[]
+  reports            Report[]
+  trackingLinks      TrackingLink[]
+  walletAssociations WalletCampaignAssociation[]
+  qualifyingConversions QualifyingConversion[]
+
+  @@index([workspaceId, projectId])
+  @@index([workspaceId, partnerId, startAt])
+  @@map("campaigns")
+}
+
+model CampaignTermsVersion {
+  id                  String    @id @default(uuid())
+  campaignId          String    @map("campaign_id")
+  version             Int
+  confirmedById        String?   @map("confirmed_by")
+  confirmedAt         DateTime? @map("confirmed_at") @db.Timestamptz
+  rawEvidenceId       String?   @map("raw_evidence_id")
+  structuredTermsJson Json      @map("structured_terms_json")
+  sha256              String
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, version])
+  @@map("campaign_terms_versions")
+}
+
+enum DeliverableKind {
+  POST
+  THREAD
+  REPLY
+  VIDEO
+  SPACE
+  COMMUNITY_MENTION
+  OTHER
+}
+
+enum DeliverableStatus {
+  PENDING
+  VERIFIED_FULFILLED
+  USER_CONFIRMED_FULFILLED
+  UNRESOLVED
+  LATE
+  MISSED
+}
+
+model Deliverable {
+  id               String            @id @default(uuid())
+  campaignId       String            @map("campaign_id")
+  kind             DeliverableKind
+  channel          String
+  requiredQuantity Int               @default(1) @map("required_quantity")
+  dueAt            DateTime?         @map("due_at") @db.Timestamptz
+  requirementsJson Json              @default("{}") @map("requirements_json")
+  status           DeliverableStatus @default(PENDING)
+  termsVersion     Int               @default(0) @map("terms_version")
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz
+
+  campaign      Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  evidenceLinks DeliverableEvidenceLink[]
+
+  @@index([campaignId, dueAt])
+  @@map("deliverables")
+}
+
+enum EvidenceRelation {
+  SUPPORTS
+  CONTRADICTS
+  CONTEXT_ONLY
+}
+
+enum VerificationBasis {
+  ONCHAIN_CANONICAL
+  PLATFORM_AUTHENTICATED
+  HUMAN_CONFIRMED
+  PARTNER_REPORTED
+  MODEL_EXTRACTED
+  UNVERIFIABLE
+}
+
+model DeliverableEvidenceLink {
+  id                String            @id @default(uuid())
+  deliverableId     String            @map("deliverable_id")
+  evidenceId        String            @map("evidence_id")
+  relation          EvidenceRelation
+  verificationBasis VerificationBasis @map("verification_basis")
+  actorId           String?           @map("actor_id")
+  verifiedAt        DateTime?         @map("verified_at") @db.Timestamptz
+
+  deliverable Deliverable @relation(fields: [deliverableId], references: [id], onDelete: Cascade)
+  evidence    Evidence    @relation(fields: [evidenceId], references: [id], onDelete: Cascade)
+
+  @@index([deliverableId])
+  @@index([evidenceId])
+  @@map("deliverable_evidence_links")
+}
+
+enum EvidenceKind {
+  ONCHAIN_SWAP
+  TOKEN_TRANSFER
+  POST_URL
+  API_POST
+  IMAGE
+  PDF
+  TERMS
+  MANUAL_NOTE
+  TRACKED_CLICK
+  SIGNED_WALLET
+}
+
+enum SourceMethod {
+  RPC
+  PLATFORM_API
+  UPLOAD
+  MANUAL
+  SIGNED_OPT_IN
+}
+
+enum CollectionStatus {
+  RAW
+  PARSED
+  FAILED
+  STALE
+}
+
+enum EvidenceStatus {
+  SUBMITTED
+  RETRIEVED_FROM_SOURCE
+  HUMAN_CONFIRMED
+  UNVERIFIABLE
+  CONTRADICTED
+  WITHDRAWN
+}
+
+model Evidence {
+  id                  String            @id @default(uuid())
+  workspaceId         String            @map("workspace_id")
+  campaignId          String?           @map("campaign_id")
+  kind                EvidenceKind
+  sourceMethod        SourceMethod      @map("source_method")
+  sourceRef           String            @map("source_ref")
+  objectKey           String?           @map("object_key")
+  sha256              String?
+  submittedById       String?           @map("submitted_by")
+  observedAt          DateTime?         @map("observed_at") @db.Timestamptz
+  ingestedAt          DateTime          @default(now()) @map("ingested_at") @db.Timestamptz
+  verifiedAt          DateTime?         @map("verified_at") @db.Timestamptz
+  verificationBasis   VerificationBasis @map("verification_basis")
+  collectionStatus    CollectionStatus  @default(RAW) @map("collection_status")
+  status              EvidenceStatus    @default(SUBMITTED)
+  isAuthenticityEstablished Boolean     @default(false) @map("is_authenticity_established")
+  sourceMetadataJson  Json              @default("{}") @map("source_metadata_json")
+  derivedFromEvidenceIdsJson Json       @default("[]") @map("derived_from_evidence_ids_json")
+
+  workspace    Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  campaign     Campaign?                 @relation(fields: [campaignId], references: [id])
+  submittedBy  User?                     @relation("EvidenceUploader", fields: [submittedById], references: [id])
+  deliverableLinks DeliverableEvidenceLink[]
+  extractions  EvidenceExtraction[]
+  findingLinks FindingEvidence[]
+  paymentObservations PaymentObservation[]
+
+  @@index([workspaceId, campaignId])
+  @@index([sha256])
+  @@index([sourceRef])
+  @@map("evidence")
+}
+
+enum ValidatorStatus {
+  PENDING
+  VALID
+  INVALID
+  CORRECTED
+}
+
+model EvidenceExtraction {
+  id             String          @id @default(uuid())
+  evidenceId     String          @map("evidence_id")
+  modelProvider  String          @map("model_provider")
+  modelId        String          @map("model_id")
+  promptVersion  String          @map("prompt_version")
+  extractionJson Json            @map("extraction_json")
+  validatorStatus ValidatorStatus @default(PENDING) @map("validator_status")
+  reviewedById    String?         @map("reviewed_by")
+  reviewedAt     DateTime?       @map("reviewed_at") @db.Timestamptz
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz
+
+  evidence Evidence @relation(fields: [evidenceId], references: [id], onDelete: Cascade)
+
+  @@index([evidenceId, createdAt])
+  @@map("evidence_extractions")
+}
+
+model PaymentObservation {
+  id                String            @id @default(uuid())
+  campaignId        String            @map("campaign_id")
+  amount            Decimal           @db.Decimal(18, 2)
+  currency          String
+  status            PaymentStatus
+  verificationBasis VerificationBasis @map("verification_basis")
+  evidenceId        String?           @map("evidence_id")
+
+  campaign Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  evidence Evidence? @relation(fields: [evidenceId], references: [id])
+
+  @@index([campaignId])
+  @@map("payment_observations")
+}
+
+// ---------------------------------------------------------------------------
+// §13.3 Chain source-of-truth and derived observations
+// ---------------------------------------------------------------------------
+
+model ChainBlock {
+  chainId     Int
+  blockNumber String   @map("block_number") // bigint as string
+  blockHash   String   @map("block_hash")
+  parentHash  String   @map("parent_hash")
+  blockTime   DateTime @map("block_time") @db.Timestamptz
+  canonical   Boolean  @default(true)
+
+  @@unique([chainId, blockHash])
+  @@index([chainId, blockNumber])
+  @@map("chain_blocks")
+}
+
+enum SyncStatus {
+  OK
+  LAGGING
+  FAILED
+}
+
+model ChainSyncCursor {
+  chainId          Int
+  contractAddress  String     @map("contract_address")
+  eventType        String     @map("event_type")
+  lastScannedBlock String     @map("last_scanned_block")
+  latestSafeBlock  String?    @map("latest_safe_block")
+  lastSuccessAt    DateTime?  @map("last_success_at") @db.Timestamptz
+  status           SyncStatus @default(OK)
+  failureCount     Int        @default(0) @map("failure_count")
+
+  @@unique([chainId, contractAddress, eventType])
+  @@map("chain_sync_cursors")
+}
+
+model RawChainEvent {
+  id              String   @id @default(uuid())
+  chainId         Int      @map("chain_id")
+  contractAddress String   @map("contract_address")
+  txHash          String   @map("tx_hash")
+  logIndex        Int      @map("log_index")
+  blockNumber     String   @map("block_number")
+  blockHash       String   @map("block_hash")
+  topic0          String
+  topicsJson      Json     @map("topics_json")
+  dataHex         String   @map("data_hex")
+  canonical       Boolean  @default(true)
+  firstSeenAt     DateTime @default(now()) @map("first_seen_at") @db.Timestamptz
+
+  swapObservation     SwapObservation?
+  transferObservation TransferObservation?
+
+  @@unique([chainId, txHash, logIndex, blockHash])
+  @@index([contractAddress, blockNumber])
+  @@map("raw_chain_events")
+}
+
+enum SwapSide {
+  BUY
+  SELL
+  UNKNOWN
+}
+
+model SwapObservation {
+  id               String   @id @default(uuid())
+  rawEventId       String   @unique @map("raw_event_id")
+  poolId           String   @map("pool_id")
+  projectId        String?  @map("project_id")
+  blockTime        DateTime @map("block_time") @db.Timestamptz
+  side             SwapSide
+  amount0Raw       String   @map("amount0_raw")
+  amount1Raw       String   @map("amount1_raw")
+  wethAmountRaw    String   @map("weth_amount_raw")
+  sqrtPriceX96     String?  @map("sqrt_price_x96")
+  normalizerVersion String  @map("normalizer_version")
+
+  rawEvent RawChainEvent @relation(fields: [rawEventId], references: [id], onDelete: Cascade)
+  pool     Pool          @relation(fields: [poolId], references: [id])
+
+  @@index([projectId, blockTime])
+  @@map("swap_observations")
+}
+
+model TransferObservation {
+  id          String   @id @default(uuid())
+  rawEventId  String   @unique @map("raw_event_id")
+  tokenId     String   @map("token_id")
+  fromAddress String   @map("from_address")
+  toAddress   String   @map("to_address")
+  amountRaw   String   @map("amount_raw")
+  blockTime   DateTime @map("block_time") @db.Timestamptz
+
+  rawEvent RawChainEvent @relation(fields: [rawEventId], references: [id], onDelete: Cascade)
+  token    Token         @relation(fields: [tokenId], references: [id])
+
+  @@index([tokenId, fromAddress])
+  @@index([tokenId, toAddress])
+  @@map("transfer_observations")
+}
+
+enum WalletLabelType {
+  POOL
+  ROUTER
+  LOCKER
+  BURN
+  TOKEN_CONTRACT
+  CREATOR_KNOWN
+  TREASURY_KNOWN
+  EXCHANGE_KNOWN
+  UNCLASSIFIED
+}
+
+model WalletLabel {
+  id               String          @id @default(uuid())
+  workspaceId      String          @map("workspace_id")
+  chainId          Int             @map("chain_id")
+  address          String
+  label            WalletLabelType
+  reason           String?
+  sourceEvidenceId String?         @map("source_evidence_id")
+  addedById         String?         @map("added_by")
+  activeFrom       DateTime        @default(now()) @map("active_from") @db.Timestamptz
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, chainId, address])
+  @@map("wallet_labels")
+}
+
+model BalanceSnapshot {
+  id             String @id @default(uuid())
+  tokenId        String @map("token_id")
+  blockNumber    String @map("block_number")
+  address        String
+  balanceRaw     String @map("balance_raw")
+  methodVersion  String @map("method_version")
+
+  token Token @relation(fields: [tokenId], references: [id], onDelete: Cascade)
+
+  @@unique([tokenId, blockNumber, address, methodVersion])
+  @@map("balance_snapshots")
+}
+
+enum SourceHealthStatus {
+  COMPLETE
+  PARTIAL
+  STALE
+  UNAVAILABLE
+  NOT_APPLICABLE
+}
+
+model SourceHealth {
+  id             String             @id @default(uuid())
+  workspaceId    String             @map("workspace_id")
+  sourceType     String             @map("source_type")
+  scopeId        String             @map("scope_id")
+  lastSuccessAt  DateTime?          @map("last_success_at") @db.Timestamptz
+  dataAsOf       DateTime?          @map("data_as_of") @db.Timestamptz
+  status         SourceHealthStatus @default(NOT_APPLICABLE)
+  coverageJson   Json               @default("{}") @map("coverage_json")
+  lastErrorCode  String?            @map("last_error_code")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, scopeId, sourceType])
+  @@map("source_health")
+}
+
+model PriceQuote {
+  id           String   @id @default(uuid())
+  assetPair    String   @map("asset_pair")
+  source       String
+  quoteTime    DateTime @map("quote_time") @db.Timestamptz
+  priceNumeric Decimal  @map("price_numeric") @db.Decimal(30, 10)
+  retrievedAt  DateTime @default(now()) @map("retrieved_at") @db.Timestamptz
+
+  @@index([assetPair, source, quoteTime])
+  @@map("price_quotes")
+}
+
+// ---------------------------------------------------------------------------
+// §13.4 Tracking and attribution
+// ---------------------------------------------------------------------------
+
+enum TrackingLinkStatus {
+  ACTIVE
+  PAUSED
+  EXPIRED
+}
+
+model TrackingLink {
+  id              String             @id @default(uuid())
+  workspaceId     String             @map("workspace_id")
+  campaignId      String             @map("campaign_id")
+  partnerId       String?            @map("partner_id")
+  slug            String             @unique
+  destinationUrl  String             @map("destination_url")
+  status          TrackingLinkStatus @default(ACTIVE)
+  createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz
+  expiresAt       DateTime?          @map("expires_at") @db.Timestamptz
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  campaign  Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  partner   Partner?  @relation(fields: [partnerId], references: [id])
+
+  clicks       TrackingClick[]
+  challenges   WalletAssociationChallenge[]
+  associations WalletCampaignAssociation[]
+
+  @@index([campaignId])
+  @@map("tracking_links")
+}
+
+model TrackingClick {
+  id                       String   @id @default(uuid())
+  trackingLinkId           String   @map("tracking_link_id")
+  occurredAt               DateTime @default(now()) @map("occurred_at") @db.Timestamptz
+  anonymousSessionIdHash   String   @map("anonymous_session_id_hash")
+  referrerClass            String?  @map("referrer_class")
+  isInternal               Boolean  @default(false) @map("is_internal")
+  isSuspectedBot           Boolean  @default(false) @map("is_suspected_bot")
+  consentBasis             String?  @map("consent_basis")
+
+  trackingLink TrackingLink @relation(fields: [trackingLinkId], references: [id], onDelete: Cascade)
+
+  @@index([trackingLinkId, occurredAt])
+  @@map("tracking_clicks")
+}
+
+model WalletAssociationChallenge {
+  id              String    @id @default(uuid())
+  trackingLinkId  String    @map("tracking_link_id")
+  nonceHash       String    @unique @map("nonce_hash")
+  domain          String
+  messageTextHash String    @map("message_text_hash")
+  chainId         Int       @map("chain_id")
+  expiresAt       DateTime  @map("expires_at") @db.Timestamptz
+  usedAt          DateTime? @map("used_at") @db.Timestamptz
+
+  trackingLink TrackingLink @relation(fields: [trackingLinkId], references: [id], onDelete: Cascade)
+
+  @@map("wallet_association_challenges")
+}
+
+model WalletCampaignAssociation {
+  id             String    @id @default(uuid())
+  workspaceId    String    @map("workspace_id")
+  campaignId     String    @map("campaign_id")
+  trackingLinkId String    @map("tracking_link_id")
+  walletAddress  String    @map("wallet_address")
+  signatureHash  String    @map("signature_hash")
+  signedAt       DateTime  @map("signed_at") @db.Timestamptz
+  expiresAt      DateTime  @map("expires_at") @db.Timestamptz
+  revokedAt      DateTime? @map("revoked_at") @db.Timestamptz
+  consentVersion String    @map("consent_version")
+
+  workspace    Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  campaign     Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  trackingLink TrackingLink @relation(fields: [trackingLinkId], references: [id])
+
+  @@index([campaignId, walletAddress, signedAt])
+  @@map("wallet_campaign_associations")
+}
+
+enum ConversionStatus {
+  VERIFIED_BUY
+  UNRESOLVED
+  REJECTED
+}
+
+model QualifyingConversion {
+  id                      String            @id @default(uuid())
+  workspaceId             String            @map("workspace_id")
+  campaignId              String            @map("campaign_id")
+  walletAddress           String            @map("wallet_address")
+  txHash                  String            @map("tx_hash")
+  chainId                 Int               @map("chain_id")
+  tokenId                 String            @map("token_id")
+  wethAmountRaw           String            @map("weth_amount_raw")
+  qualificationVersion    String            @map("qualification_version")
+  evidenceEventIdsJson    Json              @default("[]") @map("evidence_event_ids_json")
+  status                  ConversionStatus  @default(UNRESOLVED)
+  attributionPolicyVersion String           @map("attribution_policy_version")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  campaign  Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, txHash, walletAddress, attributionPolicyVersion])
+  @@index([walletAddress])
+  @@map("qualifying_conversions")
+}
+
+// ---------------------------------------------------------------------------
+// §13.5 Agent runs, findings, decisions and exports
+// ---------------------------------------------------------------------------
+
+enum RunStatus {
+  CREATED
+  VALIDATE_INPUTS
+  LOAD_PRIOR_CONTEXT
+  PLAN_INVESTIGATION
+  FETCH_AGREEMENTS_AND_POST_EVIDENCE
+  ENSURE_CHAIN_SYNC
+  QUERY_ZETARIS
+  ASSESS_GAPS
+  FETCH_ADDITIONAL_SOURCE
+  COMPUTE_METRICS
+  DRAFT_FINDINGS_WITH_NEMOTRON
+  APPLY_EVIDENCE_AND_LANGUAGE_VALIDATORS
+  PERSIST_WORLD_MODEL_AND_HMEM
+  BUILD_SCORECARD
+  COMPLETE
+  PARTIAL_COMPLETE
+  FAILED
+  CANCELLED
+}
+
+model InvestigationRun {
+  id                   String    @id @default(uuid())
+  workspaceId          String    @map("workspace_id")
+  campaignId           String    @map("campaign_id")
+  status               RunStatus @default(CREATED)
+  requestedById         String?   @map("requested_by")
+  startedAt            DateTime? @map("started_at") @db.Timestamptz
+  finishedAt           DateTime? @map("finished_at") @db.Timestamptz
+  dataSnapshotHash     String?   @map("data_snapshot_hash")
+  policyVersion        String    @map("policy_version")
+  modelId              String?   @map("model_id")
+  zetarisQueryRefsJson Json      @default("[]") @map("zetaris_query_refs_json")
+  errorCode            String?   @map("error_code")
+  attemptNo            Int       @default(1) @map("attempt_no")
+  idempotencyKey       String    @unique @map("idempotency_key")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  campaign  Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  steps   InvestigationStep[]
+  metrics Metric[]
+  findings Finding[]
+  reports Report[]
+
+  @@index([workspaceId, campaignId, startedAt])
+  @@map("investigation_runs")
+}
+
+enum StepState {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+model InvestigationStep {
+  id                 String    @id @default(uuid())
+  runId              String    @map("run_id")
+  sequence           Int
+  stepType           String    @map("step_type")
+  toolName           String?   @map("tool_name")
+  state              StepState @default(PENDING)
+  startedAt          DateTime? @map("started_at") @db.Timestamptz
+  finishedAt         DateTime? @map("finished_at") @db.Timestamptz
+  providerRequestId  String?   @map("provider_request_id")
+  redactedInputJson  Json      @default("{}") @map("redacted_input_json")
+  outputRefJson      Json      @default("{}") @map("output_ref_json")
+  errorCode          String?   @map("error_code")
+
+  run InvestigationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, sequence])
+  @@map("investigation_steps")
+}
+
+enum CoverageStatus {
+  COMPLETE
+  PARTIAL
+  STALE
+  UNAVAILABLE
+  NOT_APPLICABLE
+}
+
+model Metric {
+  id             String         @id @default(uuid())
+  runId          String         @map("run_id")
+  key            String
+  valueNumeric   Decimal?       @map("value_numeric") @db.Decimal(38, 10)
+  valueText      String?        @map("value_text")
+  unit           String?
+  numerator      Decimal?       @db.Decimal(38, 10)
+  denominator    Decimal?       @db.Decimal(38, 10)
+  windowStart    DateTime?      @map("window_start") @db.Timestamptz
+  windowEnd      DateTime?      @map("window_end") @db.Timestamptz
+  dataAsOf       DateTime       @map("data_as_of") @db.Timestamptz
+  coverageStatus CoverageStatus @map("coverage_status")
+  methodVersion  String         @map("method_version")
+  sourceRefsJson Json           @default("[]") @map("source_refs_json")
+
+  run InvestigationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, key, windowStart, windowEnd])
+  @@map("metrics")
+}
+
+enum ClaimType {
+  DELIVERY
+  MARKET_OBSERVATION
+  ATTRIBUTED_ACQUISITION
+  LIMITATION
+}
+
+enum FindingStatus {
+  SUPPORTED
+  PARTIALLY_SUPPORTED
+  UNRESOLVED
+  CONTRADICTED
+}
+
+enum FindingOrigin {
+  AGENT
+  HUMAN
+  RULE
+}
+
+enum AttributionLanguage {
+  NONE
+  OBSERVED_ONLY
+  TRACKED_VERIFIED
+}
+
+model Finding {
+  id                  String              @id @default(uuid())
+  runId               String              @map("run_id")
+  claimType           ClaimType           @map("claim_type")
+  text                String
+  status              FindingStatus
+  origin              FindingOrigin
+  attributionLanguage AttributionLanguage @map("attribution_language")
+  currentRevisionId   String?             @map("current_revision_id")
+
+  run       InvestigationRun  @relation(fields: [runId], references: [id], onDelete: Cascade)
+  revisions FindingRevision[]
+  evidence  FindingEvidence[]
+
+  @@index([runId, claimType, status])
+  @@map("findings")
+}
+
+model FindingRevision {
+  id                  String    @id @default(uuid())
+  findingId           String    @map("finding_id")
+  supersedesRevisionId String?  @map("supersedes_revision_id")
+  text                String
+  reason              String?
+  authorType          String    @map("author_type")
+  authorId            String?   @map("author_id")
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  finding Finding @relation(fields: [findingId], references: [id], onDelete: Cascade)
+
+  @@index([findingId, createdAt])
+  @@map("finding_revisions")
+}
+
+model FindingEvidence {
+  findingId  String           @map("finding_id")
+  evidenceId String           @map("evidence_id")
+  relation   EvidenceRelation
+
+  finding  Finding  @relation(fields: [findingId], references: [id], onDelete: Cascade)
+  evidence Evidence @relation(fields: [evidenceId], references: [id], onDelete: Cascade)
+
+  @@id([findingId, evidenceId])
+  @@map("finding_evidence")
+}
+
+enum ReportStatus {
+  DRAFT
+  NEEDS_REVIEW
+  APPROVED
+  DISPUTED
+  SUPERSEDED
+}
+
+enum SuggestedAction {
+  RENEW
+  CONDITIONAL_TRIAL
+  REQUEST_EVIDENCE
+  DO_NOT_RENEW
+  INSUFFICIENT_DATA
+}
+
+model Report {
+  id                 String          @id @default(uuid())
+  workspaceId        String          @map("workspace_id")
+  campaignId         String          @map("campaign_id")
+  runId              String          @map("run_id")
+  version            Int
+  status             ReportStatus    @default(DRAFT)
+  suggestedAction    SuggestedAction @map("suggested_action")
+  reviewedAction     SuggestedAction? @map("reviewed_action")
+  reviewedById        String?         @map("reviewed_by")
+  reviewedAt         DateTime?       @map("reviewed_at") @db.Timestamptz
+  policyVersion      String          @map("policy_version")
+  dataAsOf           DateTime        @map("data_as_of") @db.Timestamptz
+  limitationsJson    Json            @default("[]") @map("limitations_json")
+  snapshotJson       Json            @map("snapshot_json")
+  supersedesReportId String?         @map("supersedes_report_id")
+  sha256             String
+  createdAt          DateTime        @default(now()) @map("created_at") @db.Timestamptz
+
+  workspace Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  campaign  Campaign           @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  run       InvestigationRun   @relation(fields: [runId], references: [id])
+  exports   ReportExport[]
+
+  @@unique([campaignId, version])
+  @@map("reports")
+}
+
+model ReportExport {
+  id        String   @id @default(uuid())
+  reportId  String   @map("report_id")
+  format    String
+  objectKey String   @map("object_key")
+  sha256    String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId, format])
+  @@map("report_exports")
+}
+
+model WorldModelEvent {
+  id                 String   @id @default(uuid())
+  workspaceId        String   @map("workspace_id")
+  entityKey          String   @map("entity_key")
+  eventType          String   @map("event_type")
+  payloadJson        Json     @map("payload_json")
+  sourceRef          String?  @map("source_ref")
+  supersedesEventId  String?  @map("supersedes_event_id")
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, entityKey, createdAt])
+  @@map("world_model_events")
+}
+
+enum MemoryTier {
+  SHORT_TERM
+  WORKING
+  LONG_TERM
+}
+
+enum TrustLevel {
+  LOW
+  MEDIUM
+  HIGH
+  VERIFIED
+}
+
+model MemoryRecord {
+  id                 String     @id @default(uuid())
+  workspaceId        String     @map("workspace_id")
+  subjectKey         String     @map("subject_key")
+  tier               MemoryTier
+  summary            String
+  sourceRefsJson     Json       @default("[]") @map("source_refs_json")
+  derivedFromIdsJson Json       @default("[]") @map("derived_from_ids_json")
+  trustLevel         TrustLevel @map("trust_level")
+  supersedesId       String?    @map("supersedes_id")
+  isDeleted          Boolean    @default(false) @map("is_deleted")
+  createdAt          DateTime   @default(now()) @map("created_at") @db.Timestamptz
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, subjectKey, tier])
+  @@map("memory_records")
+}
+
+model AuditEvent {
+  id         String   @id @default(uuid())
+  workspaceId String  @map("workspace_id")
+  actorType  String   @map("actor_type")
+  actorId    String?  @map("actor_id")
+  action     String
+  targetType String   @map("target_type")
+  targetId   String   @map("target_id")
+  beforeHash String?  @map("before_hash")
+  afterHash  String?  @map("after_hash")
+  reason     String?
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  actor     User?     @relation("AuditActor", fields: [actorId], references: [id])
+
+  @@index([workspaceId, createdAt])
+  @@map("audit_events")
+}
+
+enum DeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+model Notification {
+  id          String         @id @default(uuid())
+  workspaceId String         @map("workspace_id")
+  userId      String         @map("user_id")
+  kind        String
+  payloadJson Json           @default("{}") @map("payload_json")
+  deliveryStatus DeliveryStatus @default(PENDING) @map("delivery_status")
+  createdAt   DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  readAt      DateTime?      @map("read_at") @db.Timestamptz
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@map("notifications")
+}
+
+enum IntegrationHealthStatus {
+  UNCONFIGURED
+  HEALTHY
+  DEGRADED
+  FAILED
+}
+
+model IntegrationConnection {
+  id             String                   @id @default(uuid())
+  workspaceId    String                   @map("workspace_id")
+  provider       String
+  configRef      String?                  @map("config_ref")
+  healthStatus   IntegrationHealthStatus  @default(UNCONFIGURED) @map("health_status")
+  lastVerifiedAt DateTime?                @map("last_verified_at") @db.Timestamptz
+  lastFailureAt  DateTime?                @map("last_failure_at") @db.Timestamptz
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, provider])
+  @@map("integration_connections")
+}
