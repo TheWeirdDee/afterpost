@@ -41,6 +41,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@afterpost/chain-pons':
+        specifier: workspace:*
+        version: link:../../packages/chain-pons
       '@afterpost/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
