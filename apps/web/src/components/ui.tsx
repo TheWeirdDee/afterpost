@@ -7,11 +7,12 @@ type Tone = "good" | "info" | "warn" | "bad" | "muted" | "accent" | "delivery" |
 export function Logo({ href = "/" }: { href?: string }) {
   return (
     <Link href={href} className="logo" aria-label="Afterpost home">
-      <svg className="logo-mark" viewBox="0 0 32 32" fill="none" aria-hidden>
-        <rect x="1" y="1" width="30" height="30" rx="9" stroke="currentColor" strokeOpacity=".25" />
-        <path d="M9 22 16 8l7 14" stroke="#a597ff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M11.8 17.5h8.4" stroke="#6ee7b7" strokeWidth="2" strokeLinecap="round" />
-        <circle cx="16" cy="22" r="1.6" fill="#fbbf77" />
+      <svg className="logo-mark" viewBox="0 0 28 28" fill="none" aria-hidden>
+        <rect width="28" height="28" rx="8" fill="#171a20" />
+        <rect x="0.5" y="0.5" width="27" height="27" rx="7.5" stroke="#fff" strokeOpacity=".14" />
+        <rect x="7" y="7" width="14" height="3.4" rx="1.7" fill="#6ee7b7" />
+        <rect x="7" y="12.3" width="9" height="3.4" rx="1.7" fill="#7dd3fc" />
+        <rect x="7" y="17.6" width="11.5" height="3.4" rx="1.7" fill="#fbbf77" />
       </svg>
       Afterpost
     </Link>

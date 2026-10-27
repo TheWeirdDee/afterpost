@@ -113,7 +113,7 @@ export default async function CampaignPage({ params }: { params: Promise<{ id: s
             {act ? (
               <>
                 <p className="sub" style={{ marginBottom: 12 }}>Suggested action, not a verdict. You decide.</p>
-                <p className="display" style={{ fontSize: 40, lineHeight: 1 }}>{act.label}</p>
+                <p className="display" style={{ fontSize: 30, lineHeight: 1.1 }}>{act.label}</p>
                 <p className="sub" style={{ margin: "8px 0 14px" }}>{act.why}</p>
                 {report && (
                   <>
